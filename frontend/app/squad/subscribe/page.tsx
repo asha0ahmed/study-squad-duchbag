@@ -8,6 +8,7 @@ import {
   getMySquad,
   getSession,
   getLatestPayment,
+  needsProfiler,
   StoredSession,
   submitPayment,
 } from "@/lib/api";
@@ -57,6 +58,10 @@ export default function SubscribePage() {
     if (sessionChecked && (!session || session.role !== "student")) {
       router.replace("/auth");
     }
+  }, [sessionChecked, session, router]);
+
+  useEffect(() => {
+    if (sessionChecked && needsProfiler(session)) router.replace("/profiler");
   }, [sessionChecked, session, router]);
 
   const load = useCallback(async () => {
@@ -114,7 +119,7 @@ export default function SubscribePage() {
     }
   }
 
-  if (!sessionChecked || !session?.student || screen.state === "loading") {
+  if (!sessionChecked || !session?.student || needsProfiler(session) || screen.state === "loading") {
     return (
       <main className="flex flex-1 items-center justify-center">
         <p className="text-sm text-text-dim">Loading…</p>

@@ -15,8 +15,15 @@ import { FormError } from "@/components/auth/DossierCard";
 
 type Tab = "mine" | "browse";
 
-export function MentorDesk({ mentor }: { mentor: MentorSession }) {
-  const [tab, setTab] = useState<Tab>("mine");
+export function MentorDesk({
+  mentor,
+  initialTab = "mine",
+}: {
+  mentor: MentorSession;
+  /** Lets links (e.g. the mobile drawer's "Browse Open Squads") land directly on a tab via /desk?tab=browse. */
+  initialTab?: Tab;
+}) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [mySquads, setMySquads] = useState<MentorSquad[]>([]);
   const [available, setAvailable] = useState<Squad[]>([]);
   const [loaded, setLoaded] = useState(false);

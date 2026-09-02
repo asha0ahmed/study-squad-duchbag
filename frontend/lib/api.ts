@@ -96,6 +96,33 @@ export function clearSession() {
   window.localStorage.removeItem(SESSION_KEY);
 }
 
+/**
+ * True when a logged-in student hasn't saved subject ratings yet (see
+ * StudentSession.profile_completed). Shared by every student-only route so
+ * "which routes are gated" lives in one place instead of being re-derived
+ * per page. Non-students are never gated by this.
+ */
+export function needsProfiler(session: StoredSession | null): boolean {
+  return !!session && session.role === "student" && !session.student?.profile_completed;
+}
+
+/**
+ * Locally patches the stored session right after the Profiler successfully
+ * saves subjects, so profile_completed flips to `true` immediately without
+ * requiring the student to log out and back in for the redirect/guards to
+ * notice. Safe no-op if there's no student session on file.
+ */
+export function markStudentProfileComplete() {
+  if (!isBrowser()) return;
+  const current = getSession();
+  const token = getToken();
+  if (!current || current.role !== "student" || !current.student || !token) return;
+  setSession(token, {
+    ...current,
+    student: { ...current.student, profile_completed: true },
+  });
+}
+
 // ---- Admin secret storage ----
 // Deliberately separate from the student/mentor session above (different
 // auth mechanism entirely -- a shared secret header, not a JWT) and kept
@@ -117,6 +144,26 @@ export function setAdminSecret(secret: string) {
 export function clearAdminSecret() {
   if (!isBrowser()) return;
   window.sessionStorage.removeItem(ADMIN_SECRET_KEY);
+}
+
+// ---- Squad Notes "seen" tracking (client-only, best-effort) ----
+// The backend has no read-receipt concept. This just remembers, per squad,
+// the timestamp of the newest message the student has actually opened
+// Squad Notes to see, so the mobile drawer can show a lightweight unread
+// dot. Nothing here syncs across devices -- it's a UX nicety, not truth.
+
+function notesSeenKey(squadId: number) {
+  return `study-squad:notes-seen:${squadId}`;
+}
+
+export function getNotesLastSeen(squadId: number): string | null {
+  if (!isBrowser()) return null;
+  return window.localStorage.getItem(notesSeenKey(squadId));
+}
+
+export function markNotesSeen(squadId: number, latestMessageAt: string) {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(notesSeenKey(squadId), latestMessageAt);
 }
 
 // ---- Core request helper ----

@@ -33,6 +33,16 @@ export interface StudentSession {
   name: string;
   email: string;
   academic_group: AcademicGroup | null;
+  /**
+   * Whether this student has ever saved subject ratings via
+   * saveStudentSubjects (see backend POST /students/:id/subjects). Backed
+   * by an EXISTS check on student_subjects, not a stored column -- there is
+   * no separate "profile" concept in the backend today. Sessions cached in
+   * localStorage from before this field existed won't have it; treat a
+   * missing value as `false` (safer to send someone to the Profiler again
+   * than to wrongly let a first-timer skip it).
+   */
+  profile_completed?: boolean;
 }
 
 // ---- Mentors ----

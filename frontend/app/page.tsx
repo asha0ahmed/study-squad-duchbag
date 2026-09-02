@@ -1,6 +1,31 @@
 import Link from "next/link";
+import { SUBJECTS_BY_GROUP } from "@/lib/subjects";
+import type { AcademicGroup } from "@/lib/types";
 
 const MEMBERS = ["Rafi", "Anika", "Tanvir", "Nusrat", "Farhan", "Mim"];
+
+// Canonical list of academic groups the platform matches on -- pulled from
+// the same source of truth the Profiler and matching logic use, so this
+// never drifts from what's actually offered.
+const ACADEMIC_GROUPS = Object.keys(SUBJECTS_BY_GROUP) as AcademicGroup[];
+
+const GROUP_META: Record<AcademicGroup, { icon: string; blurb: string; accent: string }> = {
+  Science: {
+    icon: "🧪",
+    blurb: "Physics, Chemistry, Higher Math and more — squads built so your gaps get covered.",
+    accent: "from-indigo to-cyan",
+  },
+  Arts: {
+    icon: "📚",
+    blurb: "History, Economics, Civics and more — matched with scholars who balance out your strengths.",
+    accent: "from-violet to-coral",
+  },
+  Commerce: {
+    icon: "📈",
+    blurb: "Commerce matching is being set up on the platform right now — check back soon.",
+    accent: "from-emerald to-cyan",
+  },
+};
 
 export default function Home() {
   return (
@@ -92,6 +117,73 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Group showcase -- horizontally scrollable so new visitors can see,
+          at a glance, that squads are real and active across every group
+          before they ever sign up. */}
+      <section className="mx-auto max-w-7xl pb-20 pl-6 lg:pl-8">
+        <div className="pr-6 lg:pr-8">
+          <p className="eyebrow text-violet">Where scholars are matched</p>
+          <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-text sm:text-3xl">
+            Active groups on Study Squad
+          </h2>
+          <p className="mt-2 max-w-lg text-sm text-text-dim">
+            Every group below is a real matching track — students rating their subjects and
+            getting placed into six-person squads, not a static category page.
+          </p>
+        </div>
+
+        <div className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 pr-6 lg:pr-8">
+          {ACADEMIC_GROUPS.map((group) => {
+            const meta = GROUP_META[group];
+            const subjects = SUBJECTS_BY_GROUP[group];
+            const active = subjects.length > 0;
+            return (
+              <div
+                key={group}
+                className="card relative w-64 shrink-0 snap-start overflow-hidden p-5"
+              >
+                <div
+                  className={`glow-orb h-28 w-28 bg-gradient-to-br ${meta.accent} opacity-25`}
+                  style={{ top: "-1.5rem", right: "-1.5rem" }}
+                />
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl">{meta.icon}</span>
+                    <span className={"badge " + (active ? "badge-emerald" : "badge-neutral")}>
+                      {active ? "Matching now" : "Coming soon"}
+                    </span>
+                  </div>
+                  <p className="mt-3 font-display text-xl font-bold text-text">{group}</p>
+                  {active && (
+                    <p className="mt-1 text-xs font-medium text-text-faint">
+                      {subjects.length} subjects tracked
+                    </p>
+                  )}
+                  <p className="mt-3 text-sm leading-relaxed text-text-dim">{meta.blurb}</p>
+                  {active && (
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {subjects.slice(0, 3).map((s) => (
+                        <span
+                          key={s.id}
+                          className="rounded-full border border-border-soft bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-dim"
+                        >
+                          {s.name}
+                        </span>
+                      ))}
+                      {subjects.length > 3 && (
+                        <span className="rounded-full border border-border-soft bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-faint">
+                          +{subjects.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

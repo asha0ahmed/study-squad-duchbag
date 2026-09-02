@@ -9,6 +9,8 @@ import {
   getSession,
   getSquad,
   getSquadMessages,
+  markNotesSeen,
+  needsProfiler,
   sendSquadMessage,
   StoredSession,
 } from "@/lib/api";
@@ -51,6 +53,10 @@ function SquadNotesContent() {
 
   useEffect(() => {
     if (sessionChecked && !session) router.replace("/auth");
+  }, [sessionChecked, session, router]);
+
+  useEffect(() => {
+    if (sessionChecked && needsProfiler(session)) router.replace("/profiler");
   }, [sessionChecked, session, router]);
 
   const resolveAccess = useCallback(async () => {
@@ -98,6 +104,10 @@ function SquadNotesContent() {
     try {
       const result = await getSquadMessages(squadId);
       setMessages(result);
+      // Opening/polling this page while it's the active view is "seeing"
+      // it -- clears the mobile drawer's unread dot for this squad.
+      const latest = result[result.length - 1];
+      if (latest) markNotesSeen(squadId, latest.created_at);
     } catch {
       // Silent on poll failures -- don't interrupt an otherwise-working chat
       // over one flaky request; the next poll will retry.
@@ -135,7 +145,7 @@ function SquadNotesContent() {
     }
   }
 
-  if (!sessionChecked || !session || access.state === "loading") {
+  if (!sessionChecked || !session || needsProfiler(session) || access.state === "loading") {
     return (
       <main className="flex flex-1 items-center justify-center">
         <p className="text-sm text-text-dim">Opening Squad Notes…</p>

@@ -7,6 +7,7 @@ import {
   ApiError,
   getMySquad,
   getSession,
+  needsProfiler,
   runMatch,
   StoredSession,
 } from "@/lib/api";
@@ -40,6 +41,10 @@ export default function FindMySquadPage() {
     if (sessionChecked && (!session || session.role !== "student")) {
       router.replace("/auth");
     }
+  }, [sessionChecked, session, router]);
+
+  useEffect(() => {
+    if (sessionChecked && needsProfiler(session)) router.replace("/profiler");
   }, [sessionChecked, session, router]);
 
   const loadExistingSquad = useCallback(async () => {
@@ -104,7 +109,7 @@ export default function FindMySquadPage() {
     }
   }
 
-  if (!sessionChecked || !session?.student || state.phase === "loading") {
+  if (!sessionChecked || !session?.student || needsProfiler(session) || state.phase === "loading") {
     return (
       <main className="flex flex-1 items-center justify-center">
         <p className="text-sm text-text-dim">Checking your squad status…</p>

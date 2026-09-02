@@ -1417,6 +1417,18 @@ app.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    // Task: "force first-time users into the Profiler". There's no
+    // dedicated completion flag on the students table, and adding one would
+    // mean a migration plus keeping it in sync. The cheapest correct signal
+    // is simply whether the student has ever saved subject ratings via
+    // POST /students/:id/subjects -- that's the exact action that defines
+    // "has a profile". EXISTS short-circuits on the first row, so this is a
+    // trivial cost on every login.
+    const profileCheck = await pool.query(
+      'SELECT EXISTS(SELECT 1 FROM student_subjects WHERE student_id = $1) AS has_subjects',
+      [student.id]
+    );
+
     res.json({
       token,
       student: {
@@ -1424,6 +1436,7 @@ app.post('/login', async (req, res) => {
         name: student.name,
         email: student.email,
         academic_group: student.academic_group,
+        profile_completed: profileCheck.rows[0].has_subjects,
       },
     });
   } catch (err) {

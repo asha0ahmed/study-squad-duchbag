@@ -2,7 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, getSession, saveStudentSubjects, StoredSession } from "@/lib/api";
+import {
+  ApiError,
+  getSession,
+  markStudentProfileComplete,
+  saveStudentSubjects,
+  StoredSession,
+} from "@/lib/api";
 import { SUBJECTS_BY_GROUP } from "@/lib/subjects";
 import type { ImprovementPriority } from "@/lib/types";
 import { StampToggleGroup } from "@/components/profiler/StampToggleGroup";
@@ -95,6 +101,9 @@ export default function ProfilerPage() {
           improvement_priority: rows[s.id].improvement_priority as ImprovementPriority,
         })),
       );
+      // Unlocks /desk and the other student-only routes immediately -- no
+      // need to log out and back in for the "first save" redirect to stop.
+      markStudentProfileComplete();
       setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save your ratings. Try again.");

@@ -9,6 +9,7 @@ import {
   getMySquad,
   getSession,
   getSuggestedSquad,
+  needsProfiler,
   StoredSession,
 } from "@/lib/api";
 import type { StudentSquadView, SquadSuggestion } from "@/lib/types";
@@ -41,6 +42,12 @@ export default function SquadPage() {
     if (sessionChecked && (!session || session.role !== "student")) {
       router.replace("/auth");
     }
+  }, [sessionChecked, session, router]);
+
+  useEffect(() => {
+    // Squads are built from Profiler ratings -- nothing useful to show here
+    // until a first-timer finishes it.
+    if (sessionChecked && needsProfiler(session)) router.replace("/profiler");
   }, [sessionChecked, session, router]);
 
   const load = useCallback(async () => {
@@ -93,7 +100,7 @@ export default function SquadPage() {
     }
   }
 
-  if (!sessionChecked || !session?.student || squad === null) {
+  if (!sessionChecked || !session?.student || needsProfiler(session) || squad === null) {
     return (
       <main className="flex flex-1 items-center justify-center">
         <p className="text-sm text-text-dim">Opening your squad…</p>
