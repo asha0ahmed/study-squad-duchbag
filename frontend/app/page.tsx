@@ -9,30 +9,52 @@ const MEMBERS = ["Rafi", "Anika", "Tanvir", "Nusrat", "Farhan", "Mim"];
 // never drifts from what's actually offered.
 const ACADEMIC_GROUPS = Object.keys(SUBJECTS_BY_GROUP) as AcademicGroup[];
 
-const GROUP_META: Record<AcademicGroup, { icon: string; blurb: string; accent: string }> = {
+const GROUP_META: Record<
+  AcademicGroup,
+  { icon: string; blurb: string; accent: string; gateImage?: string }
+> = {
   Science: {
     icon: "🧪",
     blurb: "Physics, Chemistry, Higher Math and more — squads built so your gaps get covered.",
     accent: "from-indigo to-cyan",
+    gateImage: "/images/gates/science-buet.webp",
   },
   Arts: {
     icon: "📚",
     blurb: "History, Economics, Civics and more — matched with scholars who balance out your strengths.",
     accent: "from-violet to-coral",
+    gateImage: "/images/gates/arts-jahangirnagar.webp",
   },
   Commerce: {
     icon: "📈",
     blurb: "Commerce matching is being set up on the platform right now — check back soon.",
     accent: "from-emerald to-cyan",
+    // Deliberately no gate art -- there's no real Commerce track live yet,
+    // so nothing here should imply an institution or activity that isn't
+    // true. Matches the "coming soon" badge below.
   },
 };
 
 export default function Home() {
   return (
     <main className="flex-1">
-      <section className="relative mx-auto max-w-7xl px-6 pb-24 pt-16 sm:pt-24 lg:px-8">
+      <section className="relative mx-auto max-w-7xl overflow-hidden px-6 pb-24 pt-16 sm:pt-24 lg:px-8">
         <div className="glow-orb h-[28rem] w-[28rem] bg-indigo/25" style={{ top: "-6rem", left: "-8rem" }} />
         <div className="glow-orb h-96 w-96 bg-cyan/15" style={{ top: "2rem", right: "-6rem" }} />
+
+        {/* Faint campus-gate line art, screen-blended so only the glowing
+            outline reads against Midnight Navy -- a one-time "trust" moment,
+            not a persistent background, so signage stays legible-but-quiet
+            rather than something a reader has to fight for attention. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-16 top-0 z-0 h-[46rem] w-[30rem] opacity-[0.38] mix-blend-screen sm:-left-6"
+          style={{
+           backgroundImage: "url(/images/gates/collage-hero.webp)",
+            backgroundSize: "cover",
+            backgroundPosition: "top center",
+          }}
+        />
 
         <div className="relative z-10 grid items-center gap-16 lg:grid-cols-2">
           <div className="animate-fade-in-up">
@@ -145,6 +167,17 @@ export default function Home() {
                 key={group}
                 className="card relative w-64 shrink-0 snap-start overflow-hidden p-5"
               >
+                {meta.gateImage && (
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -right-6 -top-4 h-40 w-40 opacity-[0.16] mix-blend-screen"
+                    style={{
+                      backgroundImage: `url(${meta.gateImage})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "top center",
+                    }}
+                  />
+                )}
                 <div
                   className={`glow-orb h-28 w-28 bg-gradient-to-br ${meta.accent} opacity-25`}
                   style={{ top: "-1.5rem", right: "-1.5rem" }}
