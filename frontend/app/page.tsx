@@ -48,7 +48,7 @@ export default function Home() {
             rather than something a reader has to fight for attention. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-16 top-0 z-0 h-[46rem] w-[30rem] opacity-[0.38] mix-blend-screen sm:-left-6"
+          className="pointer-events-none absolute -left-16 top-0 z-0 h-[46rem] w-[30rem] opacity-[0.68] mix-blend-screen sm:-left-6"
           style={{
            backgroundImage: "url(/images/gates/collage-hero.webp)",
             backgroundSize: "cover",
