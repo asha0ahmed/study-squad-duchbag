@@ -15,6 +15,7 @@ import "@fontsource/inter/700.css";
 
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
+import { BottomNav } from "@/components/layout/BottomNav";
 
 export const metadata: Metadata = {
   title: "Study Squad",
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="bg-app min-h-full flex flex-col bg-bg text-text font-sans">
         <Navbar />
         {children}
+        <BottomNav />
       </body>
     </html>
   );
