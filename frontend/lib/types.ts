@@ -215,6 +215,56 @@ export interface SquadMessage {
   sender_name: string;
 }
 
+// ---- Admin: Student & Mentor records ----
+
+/** Minimal squad context attached to an admin student-search result. */
+export interface AdminStudentSquad {
+  id: number;
+  status: SquadStatus;
+  academic_group: AcademicGroup;
+  year: string;
+}
+
+/** Result row from GET /admin/students/search. */
+export interface AdminStudentRecord {
+  id: number;
+  name: string;
+  email: string;
+  institution: string | null;
+  year: string | null;
+  academic_group: AcademicGroup | null;
+  aspirant_type: string | null;
+  matching_status: MatchingStatus;
+  created_at: string;
+  squad: AdminStudentSquad | null;
+  latest_payment: Payment | null;
+}
+
+export interface AdminMentorGroup {
+  group_name: AcademicGroup;
+  approval_status: "pending" | "approved";
+}
+
+export interface AdminMentorSquad {
+  id: number;
+  status: SquadStatus;
+  academic_group: AcademicGroup;
+  year: string;
+  aspirant_type: string;
+}
+
+/** Result row from GET /admin/mentors. */
+export interface AdminMentorRecord {
+  id: number;
+  name: string;
+  email: string;
+  institution: string;
+  phone: string | null;
+  created_at: string;
+  groups: AdminMentorGroup[];
+  squads: AdminMentorSquad[];
+}
+
 // ---- Errors ----
 
 /** Shape of every error response body from this backend: { error: string } */

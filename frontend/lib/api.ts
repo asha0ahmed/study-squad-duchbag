@@ -11,7 +11,9 @@
  */
 
 import type {
+  AdminMentorRecord,
   AdminPayment,
+  AdminStudentRecord,
   ApiErrorBody,
   InviteResult,
   JoinResult,
@@ -349,6 +351,29 @@ export function adminRejectPayment(secret: string, paymentId: number) {
     skipAuth: true,
     adminSecret: secret,
   });
+}
+
+// ---- Admin: Student & Mentor records ----
+
+export function adminSearchStudents(secret: string, query: string) {
+  return request<AdminStudentRecord[]>(
+    `/admin/students/search?query=${encodeURIComponent(query)}`,
+    { skipAuth: true, adminSecret: secret }
+  );
+}
+
+export function adminListMentors(secret: string) {
+  return request<AdminMentorRecord[]>("/admin/mentors", {
+    skipAuth: true,
+    adminSecret: secret,
+  });
+}
+
+export function adminApproveMentorGroup(secret: string, mentorId: number, groupName: string) {
+  return request<{ mentor_id: number; group_name: string; approval_status: string }>(
+    `/mentors/${mentorId}/groups/${groupName}/approve`,
+    { method: "PATCH", skipAuth: true, adminSecret: secret }
+  );
 }
 
 // ---- Better-squad suggestion ----

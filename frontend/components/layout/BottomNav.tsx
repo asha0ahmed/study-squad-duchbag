@@ -80,6 +80,12 @@ export function BottomNav() {
     setMoreOpen(false);
   }, [pathname]);
 
+  // Admin has its own dedicated chrome (see app/admin/layout.tsx); this
+  // dock only ever knows about the student/mentor session, so it must not
+  // render at all on /admin routes -- otherwise it'd show generic,
+  // role-blind items (or nothing useful) over the admin's real nav.
+  const isAdminRoute = pathname.startsWith("/admin");
+
   const isStudent = session?.role === "student";
   const isMentor = session?.role === "mentor";
   const name = session?.student?.name ?? session?.mentor?.name ?? "";
@@ -162,14 +168,23 @@ export function BottomNav() {
 
   const squadHref = isStudent ? "/squad" : "/desk?tab=mine";
 
+  // "Home" used to hardcode "/" for every role. For a logged-in student
+  // that's still the public landing page (harmless, if a little odd);
+  // for a logged-in mentor it sent them back to a marketing page whose
+  // only calls to action are "I'm a Scholar" / "I'm a Mentor" login
+  // links -- tapping either dropped an authenticated mentor back onto a
+  // login screen, which is the reported "Home tab sends me back to
+  // login" bug. Home must always resolve to that role's own dashboard.
+  const homeHref = isMentor ? "/desk" : isStudent ? "/" : "/";
+
   const primaryItems: PrimaryItem[] = useMemo(
     () => [
       {
         key: "home",
-        href: "/",
+        href: homeHref,
         label: "Home",
         icon: HomeIcon,
-        match: (p) => p === "/",
+        match: (p) => (isMentor ? false : p === "/"),
       },
       {
         key: "dashboard",
@@ -200,7 +215,7 @@ export function BottomNav() {
         match: (p) => ["/profiler", "/squad/find", "/squad/subscribe"].includes(p),
       },
     ],
-    [squadHref, isStudent]
+    [squadHref, isStudent, isMentor, homeHref]
   );
 
   const activeIndex = useMemo(() => {
@@ -250,7 +265,7 @@ export function BottomNav() {
   const secondaryItems = isStudent ? studentSecondary : isMentor ? mentorSecondary : [];
   const notesReady = studentSquad ? studentSquad.squad.status === "locked" : false;
 
-  if (!session) return null;
+  if (!session || isAdminRoute) return null;
 
   return (
     <>

@@ -217,7 +217,7 @@ app.post('/students', async (req, res) => {
 });
 
 app.post('/mentors', async (req, res) => {
-  const { name, email, password, institution, groups } = req.body;
+  const { name, email, password, institution, groups, phone } = req.body;
 
   if (!name || !email || !password || !institution) {
     return res.status(400).json({ error: 'Name, email, password, and institution are required.' });
@@ -242,10 +242,10 @@ app.post('/mentors', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const mentorResult = await pool.query(
-      `INSERT INTO mentors (name, email, password_hash, institution)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, email, institution, created_at`,
-      [name, email, passwordHash, institution]
+      `INSERT INTO mentors (name, email, password_hash, institution, phone)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, institution, phone, created_at`,
+      [name, email, passwordHash, institution, phone || null]
     );
 
     const mentor = mentorResult.rows[0];
@@ -551,6 +551,111 @@ app.patch('/admin/payments/:paymentId/reject', async (req, res) => {
   }
 });
 
+
+// Admin: search for a single student by email, phone, or a payment
+// transaction ID. Only one identifier is required -- the caller doesn't
+// have to say which kind it is, since a student's phone number only
+// exists as `sender_phone` on one of their payments, not as a column on
+// `students` itself.
+app.get('/admin/students/search', async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const query = (req.query.query || '').trim();
+  if (!query) {
+    return res.status(400).json({ error: 'A search value is required.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT s.id, s.name, s.email, s.institution, s.year,
+              s.academic_group, s.aspirant_type, s.matching_status, s.created_at
+       FROM students s
+       LEFT JOIN payments p ON p.student_id = s.id
+       WHERE s.email ILIKE $1
+          OR p.sender_phone = $2
+          OR p.trx_id = $2
+       ORDER BY s.created_at DESC
+       LIMIT 20`,
+      [`%${query}%`, query]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No student matched that email, phone number, or transaction ID.' });
+    }
+
+    // Attach current squad + latest payment for context, without leaking
+    // password hashes or other students' data.
+    const students = await Promise.all(
+      result.rows.map(async (student) => {
+        const squadResult = await pool.query(
+          `SELECT sq.id, sq.status, sq.academic_group, sq.year
+           FROM squad_members sm
+           JOIN squads sq ON sq.id = sm.squad_id
+           WHERE sm.student_id = $1`,
+          [student.id]
+        );
+        const paymentResult = await pool.query(
+          `SELECT plan, amount, method, sender_phone, trx_id, status, created_at
+           FROM payments WHERE student_id = $1
+           ORDER BY created_at DESC LIMIT 1`,
+          [student.id]
+        );
+        return {
+          ...student,
+          squad: squadResult.rows[0] || null,
+          latest_payment: paymentResult.rows[0] || null,
+        };
+      })
+    );
+
+    res.json(students);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong searching for that student.' });
+  }
+});
+
+// Admin: list every mentor with their groups (and approval status) and
+// whichever squad(s) they're currently assigned to.
+app.get('/admin/mentors', async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  try {
+    const mentorsResult = await pool.query(
+      `SELECT id, name, email, institution, phone, created_at FROM mentors ORDER BY created_at DESC`
+    );
+
+    const mentors = await Promise.all(
+      mentorsResult.rows.map(async (mentor) => {
+        const groupsResult = await pool.query(
+          `SELECT group_name, approval_status FROM mentor_groups WHERE mentor_id = $1 ORDER BY group_name`,
+          [mentor.id]
+        );
+        const squadsResult = await pool.query(
+          `SELECT id, status, academic_group, year, aspirant_type
+           FROM squads WHERE mentor_id = $1 ORDER BY created_at DESC`,
+          [mentor.id]
+        );
+        return {
+          ...mentor,
+          groups: groupsResult.rows,
+          squads: squadsResult.rows,
+        };
+      })
+    );
+
+    res.json(mentors);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading mentor records.' });
+  }
+});
 
 app.post('/students/:id/match', requireAuth, async (req, res) => {
   const studentId = parseInt(req.params.id);

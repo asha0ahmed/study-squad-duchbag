@@ -14,6 +14,14 @@ import { getSession, StoredSession } from "@/lib/api";
  * session exists, everything account-related (avatar, name, sign out)
  * moved into the dock's More sheet, so this bar only needs to carry the
  * logo and, for logged-out visitors, the sign-in/get-started actions.
+ *
+ * Admin uses a completely separate auth mechanism (a secret header, not
+ * a student/mentor session -- see getAdminSecret in lib/api.ts) and its
+ * own dedicated chrome (see app/admin/layout.tsx + AdminNavbar). Without
+ * this check, an authenticated admin would fall through the `!session`
+ * branch below and see the public "Sign in / Get started" scholar CTAs,
+ * which is exactly the "admin navbar behaves like the student navbar"
+ * bug -- so this bar renders nothing at all on /admin routes.
  */
 export function Navbar() {
   const pathname = usePathname();
@@ -23,6 +31,8 @@ export function Navbar() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of an external system (localStorage) on route change
     setSession(getSession());
   }, [pathname]);
+
+  if (pathname.startsWith("/admin")) return null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border-soft/80 bg-bg/80 backdrop-blur-xl">

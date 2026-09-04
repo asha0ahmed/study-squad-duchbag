@@ -22,7 +22,7 @@ export default function AdminLoginPage() {
       // correct without inventing a new backend endpoint just for this.
       await adminListPayments(secret);
       setAdminSecret(secret);
-      router.push("/admin/payments");
+      router.push("/admin");
     } catch (err) {
       setError(err instanceof ApiError ? "Incorrect admin secret." : "Couldn't verify the secret. Try again.");
     } finally {

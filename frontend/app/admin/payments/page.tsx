@@ -1,12 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   adminApprovePayment,
   adminListPayments,
   adminRejectPayment,
-  clearAdminSecret,
   getAdminSecret,
 } from "@/lib/api";
 import type { AdminPayment, PaymentStatus } from "@/lib/types";
@@ -26,25 +24,15 @@ function formatDate(iso: string) {
 }
 
 export default function AdminPaymentsPage() {
-  const router = useRouter();
-  const [checked, setChecked] = useState(false);
-  const [secret, setSecret] = useState<string | null>(null);
+  // AdminLayout has already confirmed a secret exists before this page
+  // renders at all, so this is just reading it back for API calls --
+  // not re-doing the auth check (that would duplicate app/admin/layout.tsx).
+  const secret = getAdminSecret();
   const [filter, setFilter] = useState<Filter>("pending");
   const [payments, setPayments] = useState<AdminPayment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<number | null>(null);
-
-  useEffect(() => {
-    const s = getAdminSecret();
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of an external system (sessionStorage) on mount
-    setSecret(s);
-    setChecked(true);
-  }, []);
-
-  useEffect(() => {
-    if (checked && !secret) router.replace("/admin/login");
-  }, [checked, secret, router]);
 
   const load = useCallback(async () => {
     if (!secret) return;
@@ -79,33 +67,14 @@ export default function AdminPaymentsPage() {
     }
   }
 
-  if (!checked || !secret) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-text-dim">Checking admin access…</p>
-      </main>
-    );
-  }
-
   return (
     <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="eyebrow text-cyan">Admin</p>
-            <h1 className="mt-1 font-display text-4xl font-extrabold tracking-tight text-text">
-              Payment Review
-            </h1>
-          </div>
-          <button
-            onClick={() => {
-              clearAdminSecret();
-              router.replace("/admin/login");
-            }}
-            className="btn btn-secondary"
-          >
-            Sign Out
-          </button>
+        <div>
+          <p className="eyebrow text-cyan">Admin</p>
+          <h1 className="mt-1 font-display text-4xl font-extrabold tracking-tight text-text">
+            Payment Review
+          </h1>
         </div>
 
         <div className="mt-8 flex flex-wrap gap-2 rounded-full border border-border bg-surface p-1">

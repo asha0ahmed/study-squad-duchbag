@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { SUBJECTS_BY_GROUP } from "@/lib/subjects";
 import type { AcademicGroup } from "@/lib/types";
+import { HomeRedirect } from "@/components/layout/HomeRedirect";
+import { RunningSquadsSection } from "@/components/landing/RunningSquadsSection";
 
 const MEMBERS = ["Rafi", "Anika", "Tanvir", "Nusrat", "Farhan", "Mim"];
 
@@ -38,6 +40,7 @@ const GROUP_META: Record<
 export default function Home() {
   return (
     <main className="flex-1">
+      <HomeRedirect />
       <section className="relative mx-auto max-w-7xl overflow-hidden px-6 pb-24 pt-16 sm:pt-24 lg:px-8">
         <div className="glow-orb h-[28rem] w-[28rem] bg-indigo/25" style={{ top: "-6rem", left: "-8rem" }} />
         <div className="glow-orb h-96 w-96 bg-cyan/15" style={{ top: "2rem", right: "-6rem" }} />
@@ -219,6 +222,8 @@ export default function Home() {
           })}
         </div>
       </section>
+
+      <RunningSquadsSection />
 
       {/* Feature strip */}
       <section className="mx-auto max-w-7xl px-6 pb-24 lg:px-8">
