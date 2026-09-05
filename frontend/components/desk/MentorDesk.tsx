@@ -160,9 +160,14 @@ function MySquadsTab({ squads }: { squads: MentorSquad[] }) {
               <p className="eyebrow text-indigo">{squad.academic_group}</p>
               <span className="font-display text-lg font-bold text-text">{squad.year}</span>
             </div>
-            <Link href={`/squad/notes?squadId=${squad.id}`} className="btn btn-secondary !py-2 text-sm">
-              Squad Notes
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={`/tasks?squadId=${squad.id}`} className="btn btn-primary !py-2 text-sm">
+                Upload Task
+              </Link>
+              <Link href={`/squad/notes?squadId=${squad.id}`} className="btn btn-secondary !py-2 text-sm">
+                Squad Notes
+              </Link>
+            </div>
           </div>
           <div className="p-4">
             <CoverageMatrix subjects={SUBJECTS_BY_GROUP[squad.academic_group]} members={squad.members} />

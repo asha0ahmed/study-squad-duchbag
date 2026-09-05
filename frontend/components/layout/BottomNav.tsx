@@ -17,10 +17,11 @@ import type { Payment, StudentSquadView } from "@/lib/types";
 import {
   CloseIcon,
   DashboardIcon,
-  HomeIcon,
   MoreIcon,
   NoteIcon,
   SquadIcon,
+  StarIcon,
+  TaskIcon,
 } from "./DockIcons";
 
 function initials(name: string) {
@@ -168,23 +169,26 @@ export function BottomNav() {
 
   const squadHref = isStudent ? "/squad" : "/desk?tab=mine";
 
-  // "Home" used to hardcode "/" for every role. For a logged-in student
-  // that's still the public landing page (harmless, if a little odd);
-  // for a logged-in mentor it sent them back to a marketing page whose
-  // only calls to action are "I'm a Scholar" / "I'm a Mentor" login
-  // links -- tapping either dropped an authenticated mentor back onto a
-  // login screen, which is the reported "Home tab sends me back to
-  // login" bug. Home must always resolve to that role's own dashboard.
-  const homeHref = isMentor ? "/desk" : isStudent ? "/" : "/";
+  // Both roles get a role-appropriate second/third dock slot instead of a
+  // hardcoded student-shaped nav:
+  //   - Home -> Tasks (students see "Today's Given Tasks" + submit answers;
+  //     mentors see task management/upload for their squads). Mentors
+  //     never had a meaningful Home destination anyway (it silently
+  //     duplicated Dashboard), so this is a pure improvement for them too.
+  //   - My Squad -> Rating for mentors only (students keep My Squad as-is).
+  //     A mentor rating a squad's task submissions is a more frequent
+  //     action than re-viewing their own squad roster, which is already
+  //     one tap away via Dashboard -> My Squads.
+  const ratingOrSquadHref = isMentor ? "/rating" : squadHref;
 
   const primaryItems: PrimaryItem[] = useMemo(
     () => [
       {
-        key: "home",
-        href: homeHref,
-        label: "Home",
-        icon: HomeIcon,
-        match: (p) => (isMentor ? false : p === "/"),
+        key: "tasks",
+        href: "/tasks",
+        label: "Tasks",
+        icon: TaskIcon,
+        match: (p) => p === "/tasks",
       },
       {
         key: "dashboard",
@@ -195,10 +199,10 @@ export function BottomNav() {
       },
       {
         key: "squad",
-        href: squadHref,
-        label: "My Squad",
-        icon: SquadIcon,
-        match: (p) => (isStudent ? p === "/squad" : false),
+        href: ratingOrSquadHref,
+        label: isMentor ? "Rating" : "My Squad",
+        icon: isMentor ? StarIcon : SquadIcon,
+        match: (p) => (isMentor ? p === "/rating" : p === "/squad"),
       },
       {
         key: "note",
@@ -215,7 +219,7 @@ export function BottomNav() {
         match: (p) => ["/profiler", "/squad/find", "/squad/subscribe"].includes(p),
       },
     ],
-    [squadHref, isStudent, isMentor, homeHref]
+    [ratingOrSquadHref, isMentor]
   );
 
   const activeIndex = useMemo(() => {

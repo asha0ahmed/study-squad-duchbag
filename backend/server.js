@@ -5,6 +5,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const requireAuth = require('./middleware/auth');
 const { findAutoSquad } = require('./utils/matching');
+const { singleFileUpload } = require('./middleware/upload');
+const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
 const PORT = 3000;
 
@@ -238,10 +240,18 @@ app.post('/mentors', async (req, res) => {
     }
   }
 
+  // Wrapped in a transaction so a failure partway through (e.g. the
+  // mentor_groups insert failing) can't leave a mentor row committed
+  // without any groups -- which would otherwise silently turn every
+  // retry with the same email into a confusing 409 "already exists"
+  // even though the signup never actually succeeded.
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const mentorResult = await pool.query(
+    const mentorResult = await client.query(
       `INSERT INTO mentors (name, email, password_hash, institution, phone)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, name, email, institution, phone, created_at`,
@@ -251,19 +261,28 @@ app.post('/mentors', async (req, res) => {
     const mentor = mentorResult.rows[0];
 
     for (const g of groups) {
-      await pool.query(
+      await client.query(
         `INSERT INTO mentor_groups (mentor_id, group_name) VALUES ($1, $2)`,
         [mentor.id, g]
       );
     }
 
+    await client.query('COMMIT');
     res.status(201).json({ ...mentor, groups });
   } catch (err) {
+    await client.query('ROLLBACK');
     if (err.code === '23505') {
       return res.status(409).json({ error: 'A mentor with this email already exists.' });
     }
-    console.error(err);
+    // Logged in full server-side (including the Postgres error code, e.g.
+    // 42703 for "column does not exist" -- the actual root cause behind
+    // this route's most common failure, a database that hasn't had the
+    // mentors.phone migration applied) while the client still gets a
+    // generic, safe message.
+    console.error('Mentor signup failed:', err);
     res.status(500).json({ error: 'Something went wrong saving the mentor.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1562,6 +1581,349 @@ app.post('/admin/expire-stale-squads', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong expiring stale squads.' });
+  }
+});
+
+// ---- Task Management (Task -> Squad -> Squad Members) ----
+//
+// A task is created once against a squad (never duplicated per student).
+// "Which students see it" is derived at read-time from squad_members, so
+// adding/removing squad members automatically changes who sees the task
+// without touching the tasks table at all.
+
+// Looks up the squad the given student currently belongs to (or null).
+// Reused by the task routes below to make sure a student can only ever
+// see/submit tasks for their own squad.
+async function getStudentSquadId(studentId) {
+  const result = await pool.query(
+    'SELECT squad_id FROM squad_members WHERE student_id = $1',
+    [studentId]
+  );
+  return result.rows.length > 0 ? result.rows[0].squad_id : null;
+}
+
+// Mentor uploads a task file and assigns it to one of their own squads.
+app.post('/tasks', requireAuth, singleFileUpload('file'), async (req, res) => {
+  const mentorId = req.mentor?.mentorId;
+  if (!mentorId) {
+    return res.status(403).json({ error: 'Only mentors can create tasks.' });
+  }
+
+  const { title, description, squadId } = req.body;
+
+  if (!title || !squadId) {
+    return res.status(400).json({ error: 'Title and squadId are required.' });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: 'A task file (PDF, JPG, or PNG) is required.' });
+  }
+
+  const parsedSquadId = parseInt(squadId, 10);
+  if (Number.isNaN(parsedSquadId)) {
+    return res.status(400).json({ error: 'squadId must be a number.' });
+  }
+
+  try {
+    // A mentor may only assign tasks to a squad they are actually
+    // assigned to -- prevents a mentor from creating tasks "as" another
+    // mentor's squad by guessing/forging a squadId.
+    const squadResult = await pool.query('SELECT id, mentor_id FROM squads WHERE id = $1', [parsedSquadId]);
+    if (squadResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Squad not found.' });
+    }
+    if (squadResult.rows[0].mentor_id !== mentorId) {
+      return res.status(403).json({ error: 'You can only assign tasks to squads you mentor.' });
+    }
+
+    let uploadResult;
+    try {
+      uploadResult = await uploadBuffer(req.file.buffer, {
+        folder: `study-squad/tasks/${mentorId}`,
+        filenameHint: req.file.originalname,
+      });
+    } catch (uploadErr) {
+      console.error('Cloudinary upload failed (task file):', uploadErr);
+      return res.status(502).json({ error: 'Something went wrong uploading the task file.' });
+    }
+
+    const taskResult = await pool.query(
+      `INSERT INTO tasks
+        (mentor_id, squad_id, title, description, file_url, file_public_id,
+         file_resource_type, file_format, original_filename, file_size)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        mentorId,
+        parsedSquadId,
+        title,
+        description || null,
+        uploadResult.secure_url,
+        uploadResult.public_id,
+        uploadResult.resource_type,
+        uploadResult.format || null,
+        req.file.originalname,
+        uploadResult.bytes,
+      ]
+    );
+
+    res.status(201).json(taskResult.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong saving the task.' });
+  }
+});
+
+// Mentor's own tasks (optionally narrowed to one squad), each annotated
+// with how many of that squad's members have submitted so far.
+app.get('/mentors/tasks', requireAuth, async (req, res) => {
+  const mentorId = req.mentor?.mentorId;
+  if (!mentorId) {
+    return res.status(403).json({ error: 'Only mentors can view their tasks.' });
+  }
+
+  const squadIdFilter = req.query.squadId ? parseInt(req.query.squadId, 10) : null;
+
+  try {
+    const params = [mentorId];
+    let query = 'SELECT * FROM tasks WHERE mentor_id = $1';
+    if (squadIdFilter) {
+      params.push(squadIdFilter);
+      query += ' AND squad_id = $2';
+    }
+    query += ' ORDER BY created_at DESC';
+
+    const tasksResult = await pool.query(query, params);
+
+    const tasks = await Promise.all(
+      tasksResult.rows.map(async (task) => {
+        const memberCountResult = await pool.query(
+          'SELECT COUNT(*) FROM squad_members WHERE squad_id = $1',
+          [task.squad_id]
+        );
+        const submissionCountResult = await pool.query(
+          'SELECT COUNT(*) FROM task_submissions WHERE task_id = $1',
+          [task.id]
+        );
+        return {
+          ...task,
+          member_count: parseInt(memberCountResult.rows[0].count, 10),
+          submission_count: parseInt(submissionCountResult.rows[0].count, 10),
+        };
+      })
+    );
+
+    res.json(tasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong fetching your tasks.' });
+  }
+});
+
+// Student's "Today's Given Tasks" — every task assigned to their squad,
+// with their own submission (if any) attached so the UI can show
+// submitted/not-submitted state without a second round trip.
+app.get('/students/:id/tasks', requireAuth, async (req, res) => {
+  const studentId = parseInt(req.params.id, 10);
+  if (studentId !== req.student?.studentId) {
+    return res.status(403).json({ error: 'You can only view your own tasks.' });
+  }
+
+  try {
+    const squadId = await getStudentSquadId(studentId);
+    if (!squadId) {
+      return res.json([]);
+    }
+
+    const tasksResult = await pool.query(
+      `SELECT t.*, m.name AS mentor_name
+       FROM tasks t
+       JOIN mentors m ON m.id = t.mentor_id
+       WHERE t.squad_id = $1
+       ORDER BY t.created_at DESC`,
+      [squadId]
+    );
+
+    const submissionsResult = await pool.query(
+      `SELECT * FROM task_submissions WHERE student_id = $1 AND squad_id = $2`,
+      [studentId, squadId]
+    );
+    const submissionByTask = {};
+    for (const row of submissionsResult.rows) {
+      submissionByTask[row.task_id] = row;
+    }
+
+    const tasks = tasksResult.rows.map((task) => ({
+      ...task,
+      submission: submissionByTask[task.id] || null,
+    }));
+
+    res.json(tasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong fetching your tasks.' });
+  }
+});
+
+// Student uploads/replaces their answer for one task.
+app.post('/tasks/:taskId/submit', requireAuth, singleFileUpload('file'), async (req, res) => {
+  const studentId = req.student?.studentId;
+  if (!studentId) {
+    return res.status(403).json({ error: 'Only students can submit task answers.' });
+  }
+
+  const taskId = parseInt(req.params.taskId, 10);
+  if (Number.isNaN(taskId)) {
+    return res.status(400).json({ error: 'Invalid task id.' });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: 'A submission file (PDF, JPG, or PNG) is required.' });
+  }
+
+  try {
+    const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+    if (taskResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Task not found.' });
+    }
+    const task = taskResult.rows[0];
+
+    // A student may only submit to a task assigned to their own current
+    // squad -- this is what stops a request from forging a taskId to
+    // submit into another squad/mentor's task.
+    const studentSquadId = await getStudentSquadId(studentId);
+    if (!studentSquadId || studentSquadId !== task.squad_id) {
+      return res.status(403).json({ error: 'This task does not belong to your squad.' });
+    }
+
+    let uploadResult;
+    try {
+      uploadResult = await uploadBuffer(req.file.buffer, {
+        folder: `study-squad/submissions/${studentId}`,
+        filenameHint: req.file.originalname,
+      });
+    } catch (uploadErr) {
+      console.error('Cloudinary upload failed (submission file):', uploadErr);
+      return res.status(502).json({ error: 'Something went wrong uploading your submission.' });
+    }
+
+    // Upsert: resubmitting the same task replaces the previous file
+    // rather than creating a second row (task_id, student_id) is UNIQUE.
+    const submissionResult = await pool.query(
+      `INSERT INTO task_submissions
+        (task_id, student_id, squad_id, mentor_id, submission_url, submission_public_id,
+         file_resource_type, file_format, original_filename, file_size, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       ON CONFLICT (task_id, student_id) DO UPDATE SET
+         submission_url = EXCLUDED.submission_url,
+         submission_public_id = EXCLUDED.submission_public_id,
+         file_resource_type = EXCLUDED.file_resource_type,
+         file_format = EXCLUDED.file_format,
+         original_filename = EXCLUDED.original_filename,
+         file_size = EXCLUDED.file_size,
+         submitted_at = NOW(),
+         rating = NULL,
+         feedback = NULL,
+         rated_at = NULL
+       RETURNING *`,
+      [
+        taskId,
+        studentId,
+        task.squad_id,
+        task.mentor_id,
+        uploadResult.secure_url,
+        uploadResult.public_id,
+        uploadResult.resource_type,
+        uploadResult.format || null,
+        req.file.originalname,
+        uploadResult.bytes,
+      ]
+    );
+
+    res.status(201).json(submissionResult.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong saving your submission.' });
+  }
+});
+
+// Mentor's view of every submission for one of their tasks — the "Rating"
+// screen's data source.
+app.get('/tasks/:taskId/submissions', requireAuth, async (req, res) => {
+  const mentorId = req.mentor?.mentorId;
+  if (!mentorId) {
+    return res.status(403).json({ error: 'Only mentors can view task submissions.' });
+  }
+
+  const taskId = parseInt(req.params.taskId, 10);
+
+  try {
+    const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+    if (taskResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Task not found.' });
+    }
+    if (taskResult.rows[0].mentor_id !== mentorId) {
+      return res.status(403).json({ error: 'You can only view submissions for your own tasks.' });
+    }
+
+    const submissionsResult = await pool.query(
+      `SELECT ts.*, s.name AS student_name, s.email AS student_email
+       FROM task_submissions ts
+       JOIN students s ON s.id = ts.student_id
+       WHERE ts.task_id = $1
+       ORDER BY ts.submitted_at DESC`,
+      [taskId]
+    );
+
+    res.json({ task: taskResult.rows[0], submissions: submissionsResult.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong fetching submissions.' });
+  }
+});
+
+// Mentor rates one submission. Only the mentor who owns the underlying
+// task (and therefore the squad it was assigned to) may rate it, which is
+// what keeps a mentor from rating a student outside their squad.
+app.patch('/submissions/:submissionId/rate', requireAuth, async (req, res) => {
+  const mentorId = req.mentor?.mentorId;
+  if (!mentorId) {
+    return res.status(403).json({ error: 'Only mentors can rate submissions.' });
+  }
+
+  const submissionId = parseInt(req.params.submissionId, 10);
+  const { rating, feedback } = req.body;
+
+  if (rating === undefined || rating === null) {
+    return res.status(400).json({ error: 'A rating is required.' });
+  }
+  const numericRating = Number(rating);
+  if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+    return res.status(400).json({ error: 'Rating must be a whole number between 1 and 5.' });
+  }
+
+  try {
+    const submissionResult = await pool.query(
+      'SELECT * FROM task_submissions WHERE id = $1',
+      [submissionId]
+    );
+    if (submissionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Submission not found.' });
+    }
+    if (submissionResult.rows[0].mentor_id !== mentorId) {
+      return res.status(403).json({ error: 'You can only rate students in your own squad.' });
+    }
+
+    const updateResult = await pool.query(
+      `UPDATE task_submissions
+       SET rating = $1, feedback = $2, rated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [numericRating, feedback || null, submissionId]
+    );
+
+    res.json(updateResult.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong saving the rating.' });
   }
 });
 

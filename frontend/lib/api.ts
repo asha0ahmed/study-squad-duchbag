@@ -21,6 +21,7 @@ import type {
   Mentor,
   MentorSession,
   MentorSquad,
+  MentorTask,
   Payment,
   PaymentMethod,
   PaymentPlan,
@@ -32,7 +33,11 @@ import type {
   Student,
   StudentSession,
   StudentSquadView,
+  StudentTaskView,
   SubjectAssessmentInput,
+  Task,
+  TaskSubmission,
+  TaskSubmissionsResponse,
 } from "./types";
 
 // In dev this is the backend's local port. Overridable via env for later
@@ -166,6 +171,39 @@ export function getNotesLastSeen(squadId: number): string | null {
 export function markNotesSeen(squadId: number, latestMessageAt: string) {
   if (!isBrowser()) return;
   window.localStorage.setItem(notesSeenKey(squadId), latestMessageAt);
+}
+
+// ---- Multipart request helper (Task file uploads) ----
+// Separate from `request` above because file uploads must send a
+// multipart/form-data body (a FormData object) rather than JSON — the
+// browser sets the correct Content-Type (including the multipart
+// boundary) automatically as long as we don't set it ourselves.
+
+async function requestForm<T>(
+  path: string,
+  formData: FormData,
+  method: "POST" | "PATCH" = "POST",
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, { method, headers, body: formData });
+  } catch {
+    throw new ApiError(0, "Couldn't reach the server. Check your connection and try again.");
+  }
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    const body = data as ApiErrorBody | null;
+    throw new ApiError(response.status, body?.error ?? "Something went wrong.");
+  }
+
+  return data as T;
 }
 
 // ---- Core request helper ----
@@ -414,4 +452,55 @@ export function sendSquadMessage(squadId: number, message: string) {
 
 export function getSquadMessages(squadId: number) {
   return request<SquadMessage[]>(`/squads/${squadId}/messages`);
+}
+
+// ---- Task Management ----
+// Mentors create a task against one of their own squads (with a file);
+// every current member of that squad sees it under "Today's Given Tasks"
+// and can upload an answer, which the mentor then rates.
+
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  squadId: number;
+  file: File;
+}
+
+export function createTask(input: CreateTaskInput) {
+  const formData = new FormData();
+  formData.append("title", input.title);
+  if (input.description) formData.append("description", input.description);
+  formData.append("squadId", String(input.squadId));
+  formData.append("file", input.file);
+  return requestForm<Task>("/tasks", formData, "POST");
+}
+
+/** The logged-in mentor's own tasks, optionally narrowed to one squad. */
+export function getMentorTasks(squadId?: number) {
+  const query = squadId ? `?squadId=${squadId}` : "";
+  return request<MentorTask[]>(`/mentors/tasks${query}`);
+}
+
+/** A student's "Today's Given Tasks" — everything assigned to their squad. */
+export function getStudentTasks(studentId: number) {
+  return request<StudentTaskView[]>(`/students/${studentId}/tasks`);
+}
+
+/** Upload (or replace) the logged-in student's answer for one task. */
+export function submitTaskAnswer(taskId: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestForm<TaskSubmission>(`/tasks/${taskId}/submit`, formData, "POST");
+}
+
+/** Every submission for one of the mentor's own tasks — the Rating screen's data source. */
+export function getTaskSubmissions(taskId: number) {
+  return request<TaskSubmissionsResponse>(`/tasks/${taskId}/submissions`);
+}
+
+export function rateSubmission(submissionId: number, rating: number, feedback?: string) {
+  return request<TaskSubmission>(`/submissions/${submissionId}/rate`, {
+    method: "PATCH",
+    body: { rating, feedback: feedback || undefined },
+  });
 }

@@ -265,6 +265,65 @@ export interface AdminMentorRecord {
   squads: AdminMentorSquad[];
 }
 
+// ---- Task Management ----
+
+export interface Task {
+  id: number;
+  mentor_id: number;
+  squad_id: number;
+  title: string;
+  description: string | null;
+  file_url: string;
+  file_public_id: string;
+  file_resource_type: string;
+  file_format: string | null;
+  original_filename: string | null;
+  file_size: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Task row as returned to a mentor (GET /mentors/tasks) — includes rollup counts. */
+export interface MentorTask extends Task {
+  member_count: number;
+  submission_count: number;
+}
+
+export interface TaskSubmission {
+  id: number;
+  task_id: number;
+  student_id: number;
+  squad_id: number;
+  mentor_id: number;
+  submission_url: string;
+  submission_public_id: string;
+  file_resource_type: string;
+  file_format: string | null;
+  original_filename: string | null;
+  file_size: number | null;
+  submitted_at: string;
+  rating: number | null;
+  feedback: string | null;
+  rated_at: string | null;
+}
+
+/** Submission row as returned to a mentor for rating — adds student info. */
+export interface MentorSubmissionView extends TaskSubmission {
+  student_name: string;
+  student_email: string;
+}
+
+/** Task row as returned to a student (GET /students/:id/tasks) — their own submission, if any, attached. */
+export interface StudentTaskView extends Task {
+  mentor_name: string;
+  submission: TaskSubmission | null;
+}
+
+export interface TaskSubmissionsResponse {
+  task: Task;
+  submissions: MentorSubmissionView[];
+}
+
 // ---- Errors ----
 
 /** Shape of every error response body from this backend: { error: string } */

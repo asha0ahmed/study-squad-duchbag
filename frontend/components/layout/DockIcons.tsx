@@ -74,6 +74,25 @@ export function MoreIcon(props: IconProps) {
   );
 }
 
+export function TaskIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 3.5h6a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5Z" />
+      <path d="m8.25 12.5 2 2 3.5-4" />
+      <path d="M8.25 17h5.5" />
+    </svg>
+  );
+}
+
+export function StarIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 4.25 14.2 9l5.05.55-3.75 3.5 1 5.1-4.5-2.55-4.5 2.55 1-5.1-3.75-3.5L9.8 9Z" />
+    </svg>
+  );
+}
+
 export function CloseIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
