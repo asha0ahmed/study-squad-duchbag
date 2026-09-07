@@ -19,6 +19,19 @@ import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
 
 const POLL_INTERVAL_MS = 7000;
+const MAX_RECORDING_SECONDS = 120;
+
+function formatDuration(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function pickSupportedAudioMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+  return candidates.find((type) => MediaRecorder.isTypeSupported?.(type));
+}
 
 type Access =
   | { state: "loading" }
@@ -43,6 +56,14 @@ function SquadNotesContent() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingStartRef = useRef(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const s = getSession();
@@ -145,6 +166,100 @@ function SquadNotesContent() {
     }
   }
 
+  async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow picking the same file again later
+    if (!file || access.state !== "ready") return;
+    setError(null);
+    setSending(true);
+    try {
+      await sendSquadMessage(access.squadId, undefined, { file });
+      await loadMessages(access.squadId);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't send that image.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function startRecording() {
+    if (access.state !== "ready" || isRecording) return;
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = pickSupportedAudioMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
+      audioChunksRef.current = [];
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      });
+      recorder.addEventListener("stop", () => {
+        stream.getTracks().forEach((track) => track.stop());
+      });
+
+      mediaRecorderRef.current = recorder;
+      recordingStartRef.current = Date.now();
+      recorder.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        const elapsed = Math.round((Date.now() - recordingStartRef.current) / 1000);
+        setRecordingSeconds(elapsed);
+        if (elapsed >= MAX_RECORDING_SECONDS) stopRecordingAndSend();
+      }, 250);
+    } catch {
+      setError("Couldn't access your microphone. Check your browser's mic permission and try again.");
+    }
+  }
+
+  function cancelRecording() {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    audioChunksRef.current = [];
+    setIsRecording(false);
+  }
+
+  async function stopRecordingAndSend() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || access.state !== "ready") return;
+
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    const durationSeconds = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000));
+
+    const stopped = new Promise<void>((resolve) => {
+      recorder.addEventListener("stop", () => resolve(), { once: true });
+    });
+    if (recorder.state !== "inactive") recorder.stop();
+    await stopped;
+    setIsRecording(false);
+
+    const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+    audioChunksRef.current = [];
+    if (blob.size === 0) return; // stopped almost instantly -- nothing worth sending
+
+    setError(null);
+    setSending(true);
+    try {
+      await sendSquadMessage(access.squadId, undefined, { file: blob, durationSeconds });
+      await loadMessages(access.squadId);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't send that voice message.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
   if (!sessionChecked || !session || needsProfiler(session) || access.state === "loading") {
     return (
       <main className="flex flex-1 items-center justify-center">
@@ -206,7 +321,28 @@ function SquadNotesContent() {
                         </span>
                         <span className="text-xs text-text-faint">{formatTime(m.created_at)}</span>
                       </div>
-                      <p className="mt-0.5 break-words text-[15px] text-text">{m.message}</p>
+                      {m.message_type === "image" && m.attachment_url && (
+                        <a href={m.attachment_url} target="_blank" rel="noreferrer" className="mt-1 block w-fit">
+                          <img
+                            src={m.attachment_url}
+                            alt="Shared image"
+                            className="max-h-56 max-w-full rounded-lg border border-border-soft object-cover"
+                          />
+                        </a>
+                      )}
+                      {m.message_type === "voice" && m.attachment_url && (
+                        <div className="mt-1 flex items-center gap-2">
+                          <audio controls src={m.attachment_url} className="h-9 max-w-[240px]" />
+                          {m.attachment_duration_seconds ? (
+                            <span className="text-xs text-text-faint">
+                              {formatDuration(m.attachment_duration_seconds)}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+                      {m.message && (
+                        <p className="mt-0.5 break-words text-[15px] text-text">{m.message}</p>
+                      )}
                     </div>
                   </div>
                 );
@@ -215,16 +351,64 @@ function SquadNotesContent() {
           )}
         </div>
 
-        <form onSubmit={handleSend} className="mt-4 flex gap-2">
+        <form onSubmit={handleSend} className="mt-4 flex items-center gap-2">
           <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Write a note to your squad…"
-            className="input flex-1"
+            type="file"
+            accept="image/*"
+            ref={imageInputRef}
+            onChange={handleImageSelected}
+            className="hidden"
           />
-          <button type="submit" disabled={sending || !draft.trim()} className="btn btn-primary !px-5">
-            Send
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={sending || isRecording}
+            className="btn btn-secondary !px-3"
+            aria-label="Send an image"
+            title="Send an image"
+          >
+            🖼️
           </button>
+
+          {isRecording ? (
+            <div className="flex flex-1 items-center gap-2 rounded-full border border-border-soft bg-surface-2 px-3 py-2">
+              <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-red-500" aria-hidden="true" />
+              <span className="text-sm text-text-dim">Recording… {formatDuration(recordingSeconds)}</span>
+              <button
+                type="button"
+                onClick={cancelRecording}
+                className="ml-auto text-xs font-semibold text-text-faint underline"
+              >
+                Cancel
+              </button>
+              <button type="button" onClick={stopRecordingAndSend} className="btn btn-primary !px-4 !py-1.5 text-xs">
+                Send
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Write a note to your squad…"
+                className="input flex-1"
+                disabled={sending}
+              />
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={sending}
+                className="btn btn-secondary !px-3"
+                aria-label="Record a voice message"
+                title="Record a voice message"
+              >
+                🎤
+              </button>
+              <button type="submit" disabled={sending || !draft.trim()} className="btn btn-primary !px-5">
+                Send
+              </button>
+            </>
+          )}
         </form>
         <div className="mt-2">
           <FormError message={error} />

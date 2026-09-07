@@ -206,11 +206,20 @@ export interface SquadSuggestion {
 
 // ---- Chat ("Squad Notes") ----
 
+export type SquadMessageType = "text" | "image" | "voice";
+
 export interface SquadMessage {
   id: number;
   sender_type: SenderType;
   sender_id: number;
-  message: string;
+  /** Null for attachment-only messages (image/voice with no caption). */
+  message: string | null;
+  message_type: SquadMessageType;
+  attachment_url: string | null;
+  attachment_format: string | null;
+  attachment_bytes: number | null;
+  /** Voice messages only. */
+  attachment_duration_seconds: number | null;
   created_at: string;
   sender_name: string;
 }

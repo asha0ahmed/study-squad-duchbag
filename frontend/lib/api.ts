@@ -443,11 +443,35 @@ export function getMyMentorSquads() {
 
 // ---- Chat ("Squad Notes") ----
 
-export function sendSquadMessage(squadId: number, message: string) {
-  return request<SquadMessage>(`/squads/${squadId}/messages`, {
-    method: "POST",
-    body: { message },
-  });
+export interface SendSquadMessageAttachment {
+  file: File | Blob;
+  /** Required for voice clips so the bubble can show a duration immediately. */
+  durationSeconds?: number;
+}
+
+/**
+ * Sends a Squad Notes message. `message` may be omitted if `attachment`
+ * is provided (an image or voice-only message), and vice versa.
+ */
+export function sendSquadMessage(
+  squadId: number,
+  message?: string,
+  attachment?: SendSquadMessageAttachment,
+) {
+  if (!attachment) {
+    return request<SquadMessage>(`/squads/${squadId}/messages`, {
+      method: "POST",
+      body: { message },
+    });
+  }
+
+  const formData = new FormData();
+  if (message) formData.append("message", message);
+  if (attachment.durationSeconds) {
+    formData.append("duration", String(Math.round(attachment.durationSeconds)));
+  }
+  formData.append("file", attachment.file, attachment.file instanceof File ? attachment.file.name : "voice-message");
+  return requestForm<SquadMessage>(`/squads/${squadId}/messages`, formData, "POST");
 }
 
 export function getSquadMessages(squadId: number) {

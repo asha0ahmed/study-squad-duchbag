@@ -99,8 +99,15 @@ CREATE TABLE squad_messages (
   squad_id INTEGER NOT NULL REFERENCES squads(id),
   sender_type VARCHAR(10) NOT NULL CHECK (sender_type IN ('student', 'mentor')),
   sender_id INTEGER NOT NULL,
-  message TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
+  message TEXT,
+  message_type VARCHAR(10) NOT NULL DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'voice')),
+  attachment_url VARCHAR(500),
+  attachment_public_id VARCHAR(255),
+  attachment_format VARCHAR(20),
+  attachment_bytes INTEGER,
+  attachment_duration_seconds INTEGER,
+  created_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT squad_messages_text_or_attachment CHECK (message IS NOT NULL OR attachment_url IS NOT NULL)
 );
 
 -- Task 36: persist which student covers which subject in a squad
@@ -115,6 +122,51 @@ CREATE TABLE squad_subject_coverage (
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE (squad_id, student_id, subject_id)
 );
+
+-- Task Management system: mentors upload shared squad tasks and students
+-- submit answers for them. Files are stored in Cloudinary; Postgres stores
+-- only the returned URLs and metadata.
+CREATE TABLE tasks (
+  id SERIAL PRIMARY KEY,
+  mentor_id INTEGER NOT NULL REFERENCES mentors(id),
+  squad_id INTEGER NOT NULL REFERENCES squads(id),
+  title VARCHAR(150) NOT NULL,
+  description TEXT,
+  file_url VARCHAR(500) NOT NULL,
+  file_public_id VARCHAR(255) NOT NULL,
+  file_resource_type VARCHAR(20) NOT NULL,
+  file_format VARCHAR(20),
+  original_filename VARCHAR(255),
+  file_size INTEGER,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_tasks_squad ON tasks(squad_id);
+CREATE INDEX idx_tasks_mentor ON tasks(mentor_id);
+
+CREATE TABLE task_submissions (
+  id SERIAL PRIMARY KEY,
+  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES students(id),
+  squad_id INTEGER NOT NULL REFERENCES squads(id),
+  mentor_id INTEGER NOT NULL REFERENCES mentors(id),
+  submission_url VARCHAR(500) NOT NULL,
+  submission_public_id VARCHAR(255) NOT NULL,
+  file_resource_type VARCHAR(20) NOT NULL,
+  file_format VARCHAR(20),
+  original_filename VARCHAR(255),
+  file_size INTEGER,
+  submitted_at TIMESTAMP DEFAULT NOW(),
+  rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+  feedback TEXT,
+  rated_at TIMESTAMP,
+  UNIQUE (task_id, student_id)
+);
+
+CREATE INDEX idx_submissions_task ON task_submissions(task_id);
+CREATE INDEX idx_submissions_student ON task_submissions(student_id);
+CREATE INDEX idx_submissions_squad ON task_submissions(squad_id);
 
 -- Mentor-fee subscription payments. A student must have one row here with
 -- status = 'approved' before they're allowed to run matching. Submitted by

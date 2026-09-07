@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const requireAuth = require('./middleware/auth');
 const { findAutoSquad } = require('./utils/matching');
-const { singleFileUpload } = require('./middleware/upload');
+const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind } = require('./middleware/upload');
 const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
 const PORT = 3000;
@@ -1252,12 +1252,16 @@ app.patch('/squads/:squadId/reassign-mentor', async (req, res) => {
 });
 
 
-app.post('/squads/:squadId/messages', requireAuth, async (req, res) => {
+app.post('/squads/:squadId/messages', requireAuth, singleChatAttachmentUpload('file'), async (req, res) => {
   const squadId = parseInt(req.params.squadId);
-  const { message } = req.body;
+  const { message, duration } = req.body;
 
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    return res.status(400).json({ error: 'Message text is required.' });
+  const trimmedMessage = typeof message === 'string' ? message.trim() : '';
+  const hasText = trimmedMessage.length > 0;
+  const hasFile = Boolean(req.file);
+
+  if (!hasText && !hasFile) {
+    return res.status(400).json({ error: 'A message needs text, an image, or a voice recording.' });
   }
 
   try {
@@ -1295,11 +1299,54 @@ app.post('/squads/:squadId/messages', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'You are not authorized to send messages in this squad.' });
     }
 
+    // Attachment (image or voice clip) is optional and mutually
+    // descriptive of message_type -- a message is 'image'/'voice' only
+    // when a file came with it, otherwise it's plain 'text'.
+    let messageType = 'text';
+    let attachment = null;
+
+    if (hasFile) {
+      const kind = chatAttachmentKind(req.file.mimetype);
+      messageType = kind; // 'image' or 'voice' -- fileFilter already rejected anything else
+
+      try {
+        attachment = await uploadBuffer(req.file.buffer, {
+          folder: `study-squad/chat/${squadId}`,
+          filenameHint: req.file.originalname,
+        });
+      } catch (uploadErr) {
+        console.error('Cloudinary upload failed (chat attachment):', uploadErr);
+        return res.status(502).json({ error: 'Something went wrong uploading your attachment.' });
+      }
+    }
+
+    // Only meaningful for voice clips; the client records duration since
+    // the server would otherwise need to decode the audio to measure it.
+    const parsedDuration = parseInt(duration, 10);
+    const durationSeconds =
+      messageType === 'voice' && Number.isFinite(parsedDuration) && parsedDuration > 0
+        ? parsedDuration
+        : null;
+
     const insertResult = await pool.query(
-      `INSERT INTO squad_messages (squad_id, sender_type, sender_id, message)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO squad_messages
+        (squad_id, sender_type, sender_id, message, message_type,
+         attachment_url, attachment_public_id, attachment_format, attachment_bytes,
+         attachment_duration_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [squadId, senderType, senderId, message.trim()]
+      [
+        squadId,
+        senderType,
+        senderId,
+        hasText ? trimmedMessage : null,
+        messageType,
+        attachment?.secure_url ?? null,
+        attachment?.public_id ?? null,
+        attachment?.format ?? null,
+        attachment?.bytes ?? null,
+        durationSeconds,
+      ]
     );
 
     res.status(201).json(insertResult.rows[0]);
@@ -1343,7 +1390,9 @@ app.get('/squads/:squadId/messages', requireAuth, async (req, res) => {
 
     const messagesResult = await pool.query(
       `SELECT
-         sm.id, sm.sender_type, sm.sender_id, sm.message, sm.created_at,
+         sm.id, sm.sender_type, sm.sender_id, sm.message, sm.message_type,
+         sm.attachment_url, sm.attachment_format, sm.attachment_bytes,
+         sm.attachment_duration_seconds, sm.created_at,
          CASE
            WHEN sm.sender_type = 'student' THEN (SELECT name FROM students WHERE id = sm.sender_id)
            WHEN sm.sender_type = 'mentor' THEN (SELECT name FROM mentors WHERE id = sm.sender_id)
