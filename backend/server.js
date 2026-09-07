@@ -8,7 +8,7 @@ const { findAutoSquad } = require('./utils/matching');
 const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind } = require('./middleware/upload');
 const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Without this, every request from the frontend (a different origin --
 // e.g. localhost:3001 -- than this server's localhost:3000) is blocked by
