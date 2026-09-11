@@ -21,7 +21,7 @@ const YEAR_OPTIONS = [
 const ASPIRANT_TYPE_OPTIONS = [
   { value: "Engineering Admission", label: "Engineering Admission" },
   { value: "Medical Admission", label: "Medical Admission" },
-  { value: "University Admission (General)", label: "University Admission (General)" },
+  { value: "University Admission (General)", label: "University Admission (Science, Arts, Commerce)" },
   { value: "HSC Board Exam", label: "HSC Board Exam" },
 ];
 
@@ -30,6 +30,7 @@ const ASPIRANT_TYPE_OPTIONS = [
 const ACADEMIC_GROUP_OPTIONS = [
   { value: "Science", label: "Science" },
   { value: "Arts", label: "Arts" },
+  { value: "Commerce", label: "Commerce" },
 ];
 
 function StudentSignupForm() {
@@ -79,7 +80,7 @@ function StudentSignupForm() {
         password: form.password,
         institution: form.institution,
         year: form.year,
-        academic_group: form.academic_group as "Science" | "Arts",
+        academic_group: form.academic_group as "Science" | "Arts" | "Commerce",
         aspirant_type: form.aspirant_type,
         inviteCode,
       });
