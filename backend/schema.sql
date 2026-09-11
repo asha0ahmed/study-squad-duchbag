@@ -46,7 +46,18 @@ INSERT INTO subjects (name, academic_group) VALUES
 ('English', 'Arts'),
 ('Civics', 'Arts'),
 ('Sociology', 'Arts'),
-('Bangla', 'Arts');
+('Bangla', 'Arts'),
+-- Commerce: an 8-subject pool -- students pick any 6 of these in the
+-- Profiler (see REQUIRED_SUBJECT_COUNT in frontend/app/profiler/page.tsx),
+-- unlike Science/Arts where every listed subject is required.
+('Accounting', 'Commerce'),
+('Finance and Banking', 'Commerce'),
+('Marketing', 'Commerce'),
+('Management Studies', 'Commerce'),
+('Statistics', 'Commerce'),
+('Economics', 'Commerce'),
+('English', 'Commerce'),
+('ICT', 'Commerce');
 
 CREATE TABLE mentors (
   id SERIAL PRIMARY KEY,

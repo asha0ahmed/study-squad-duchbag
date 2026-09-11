@@ -30,11 +30,10 @@ const GROUP_META: Record<
   },
   Commerce: {
     icon: "📈",
-    blurb: "Commerce matching is being set up on the platform right now — check back soon.",
+    blurb: "Accounting, Finance, Marketing and more — pick 6 subjects and match with scholars who balance out your strengths.",
     accent: "from-emerald to-cyan",
-    // Deliberately no gate art -- there's no real Commerce track live yet,
-    // so nothing here should imply an institution or activity that isn't
-    // true. Matches the "coming soon" badge below.
+    // No gate image yet -- see Task 2 (aspirant-type backgrounds); add one
+    // here once a Commerce gate/campus image is supplied.
   },
 };
 
