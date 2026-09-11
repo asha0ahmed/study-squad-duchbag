@@ -39,6 +39,7 @@ function StudentSignupForm() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     password: "",
     institution: "",
     year: "",
@@ -56,6 +57,14 @@ function StudentSignupForm() {
     e.preventDefault();
     setError(null);
 
+    const email = form.email.trim();
+    const phone = form.phone.trim();
+
+    if (!email && !phone) {
+      setError("Provide an email address or a phone number.");
+      return;
+    }
+
     if (form.password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -65,7 +74,8 @@ function StudentSignupForm() {
     try {
       await signupStudent({
         name: form.name,
-        email: form.email,
+        email: email || undefined,
+        phone: phone || undefined,
         password: form.password,
         institution: form.institution,
         year: form.year,
@@ -75,7 +85,9 @@ function StudentSignupForm() {
       });
       // Signup doesn't return a session token — only /login does — so we
       // log in right after with the same credentials for a one-step flow.
-      await loginStudent(form.email, form.password);
+      // Use whichever identifier was actually provided (email may be blank
+      // if the student signed up with just a phone number).
+      await loginStudent(email || phone, form.password);
       // If signup came from an invite link and auto-join at signup time
       // didn't apply (e.g. slots filled in the meantime), send them to
       // accept it explicitly; otherwise straight to their desk.
@@ -103,9 +115,18 @@ function StudentSignupForm() {
             htmlFor="email"
             type="email"
             autoComplete="email"
-            required
+            hint="Provide an email or a phone number below (at least one is required)."
             value={form.email}
             onChange={(e) => update("email", e.target.value)}
+          />
+          <TextField
+            label="Phone Number"
+            htmlFor="phone"
+            type="tel"
+            autoComplete="tel"
+            hint="Required if you didn't provide an email above."
+            value={form.phone}
+            onChange={(e) => update("phone", e.target.value)}
           />
           <TextField
             label="Password"

@@ -18,6 +18,15 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Strips spaces/dashes from a student-entered phone number so the same
+// number typed slightly differently ("017 1234 5678" vs "01712345678")
+// still matches on login. Deliberately minimal -- no country-code
+// rewriting -- to match how phone numbers are already handled elsewhere
+// in this codebase (e.g. payments.sender_phone is stored as-typed).
+function normalizePhone(phone) {
+  return phone.replace(/[\s-]/g, '');
+}
+
 // Task 36: looks up which student covers which subject(s) in a squad.
 // Returns a map like: { 12: ['Physics'], 15: ['Chemistry', 'Biology'] }
 // so it can be merged onto a squad's member list.
@@ -146,10 +155,21 @@ app.get('/db-test', async (req, res) => {
 });
 
 app.post('/students', async (req, res) => {
-    const { name, email, password, institution, year, academic_group, aspirant_type, inviteCode } = req.body;
+    const { name, email, phone, password, institution, year, academic_group, aspirant_type, inviteCode } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Name, email, and password are required.' });
+  if (!name || !password) {
+    return res.status(400).json({ error: 'Name and password are required.' });
+  }
+
+  // Coerce blanks to null (rather than requiring the frontend to omit the
+  // field entirely) so an empty string never reaches the DB -- two
+  // students both submitting "" would otherwise collide under the UNIQUE
+  // constraint, since '' is a real, equal value, unlike NULL.
+  const normalizedEmail = email && email.trim() ? email.trim() : null;
+  const normalizedPhone = phone && phone.trim() ? normalizePhone(phone) : null;
+
+  if (!normalizedEmail && !normalizedPhone) {
+    return res.status(400).json({ error: 'An email address or phone number is required.' });
   }
 
   if (password.length < 8) {
@@ -160,10 +180,10 @@ app.post('/students', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO students (name, email, password_hash, institution, year, academic_group, aspirant_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, name, email, institution, year, academic_group, aspirant_type, matching_status, created_at`,
-      [name, email, passwordHash, institution, year, academic_group, aspirant_type]
+      `INSERT INTO students (name, email, phone, password_hash, institution, year, academic_group, aspirant_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name, email, phone, institution, year, academic_group, aspirant_type, matching_status, created_at`,
+      [name, normalizedEmail, normalizedPhone, passwordHash, institution, year, academic_group, aspirant_type]
     );
 
     const newStudent = result.rows[0];
@@ -211,6 +231,12 @@ app.post('/students', async (req, res) => {
 
   } catch (err) {
     if (err.code === '23505') {
+      // Constraint naming can differ slightly across environments (e.g. an
+      // auto-generated `students_phone_key` vs an explicitly named index),
+      // so check generically rather than one exact name.
+      if (err.constraint && err.constraint.includes('phone')) {
+        return res.status(409).json({ error: 'A student with this phone number already exists.' });
+      }
       return res.status(409).json({ error: 'A student with this email already exists.' });
     }
     console.error(err);
@@ -1564,14 +1590,25 @@ app.get('/squads/:squadId', requireAuth, async (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  // Accepts either the student's email or phone number in `identifier`.
+  // Still accepts a plain `email` field too so this stays backward
+  // compatible with any existing caller that hasn't switched over yet.
+  const identifier = req.body.identifier ?? req.body.email;
+  const { password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Email or phone number, and password, are required.' });
   }
 
   try {
-    const result = await pool.query('SELECT * FROM students WHERE email = $1', [email]);
+    // A simple "@" check is enough to route to the right column -- email
+    // addresses always contain one and phone numbers never do. No need for
+    // full email validation here; the students.email column already
+    // enforces real uniqueness/format concerns at signup.
+    const isEmail = identifier.includes('@');
+    const result = isEmail
+      ? await pool.query('SELECT * FROM students WHERE email = $1', [identifier])
+      : await pool.query('SELECT * FROM students WHERE phone = $1', [normalizePhone(identifier)]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid email or password.' });

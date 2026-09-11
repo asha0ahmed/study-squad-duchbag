@@ -11,7 +11,7 @@ function StudentLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteCode = searchParams.get("inviteCode");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,7 +21,7 @@ function StudentLoginForm() {
     setError(null);
     setLoading(true);
     try {
-      await loginStudent(email, password);
+      await loginStudent(identifier, password);
       router.push(inviteCode ? `/invite/${inviteCode}` : "/desk");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't sign you in. Try again.");
@@ -35,13 +35,13 @@ function StudentLoginForm() {
       <DossierCard eyebrow="Scholar sign-in" title="Welcome back">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <TextField
-            label="Email"
-            htmlFor="email"
-            type="email"
-            autoComplete="email"
+            label="Email or Phone Number"
+            htmlFor="identifier"
+            type="text"
+            autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
           />
           <TextField
             label="Password"

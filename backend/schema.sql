@@ -2,7 +2,8 @@
 CREATE TABLE students (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
-  email VARCHAR(150) UNIQUE NOT NULL,
+  email VARCHAR(150) UNIQUE,
+  phone VARCHAR(20) UNIQUE,
   password_hash VARCHAR(255),
   role VARCHAR(20) NOT NULL DEFAULT 'student',
   institution VARCHAR(150),

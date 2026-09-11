@@ -16,7 +16,8 @@ export type SenderType = "student" | "mentor";
 export interface Student {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
   institution: string | null;
   year: string | null;
   academic_group: AcademicGroup | null;
@@ -31,7 +32,7 @@ export interface Student {
 export interface StudentSession {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   academic_group: AcademicGroup | null;
   /**
    * Whether this student has ever saved subject ratings via

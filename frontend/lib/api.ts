@@ -260,7 +260,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export interface StudentSignupInput {
   name: string;
-  email: string;
+  /** Optional if `phone` is provided — one of the two is required. */
+  email?: string;
+  /** Optional if `email` is provided — one of the two is required. */
+  phone?: string;
   password: string;
   institution: string;
   year: string;
@@ -294,10 +297,11 @@ export function signupMentor(input: MentorSignupInput) {
   });
 }
 
-export async function loginStudent(email: string, password: string) {
+/** `identifier` is whatever the student typed in — their email or their phone number. */
+export async function loginStudent(identifier: string, password: string) {
   const result = await request<{ token: string; student: StudentSession }>(
     "/login",
-    { method: "POST", body: { email, password }, skipAuth: true },
+    { method: "POST", body: { identifier, password }, skipAuth: true },
   );
   setSession(result.token, { role: "student", student: result.student });
   return result;
