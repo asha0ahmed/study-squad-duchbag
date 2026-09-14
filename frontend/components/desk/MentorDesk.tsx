@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   assignMentorToSquad,
   getAvailableSquads,
   getMyMentorSquads,
+  uploadMentorPhoto,
 } from "@/lib/api";
 import { SUBJECTS_BY_GROUP } from "@/lib/subjects";
 import type { MentorSession, MentorSquad, Squad } from "@/lib/types";
 import { CoverageMatrix } from "@/components/squad/CoverageMatrix";
 import { FormError } from "@/components/auth/DossierCard";
+import { Avatar } from "@/components/ui/Avatar";
 
 type Tab = "mine" | "browse";
 
@@ -29,6 +31,27 @@ export function MentorDesk({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<number | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null | undefined>(mentor.photo_url);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    setPhotoUploading(true);
+    setPhotoError(null);
+    try {
+      const result = await uploadMentorPhoto(file);
+      setPhotoUrl(result.photo_url);
+    } catch (err) {
+      setPhotoError(err instanceof ApiError ? err.message : "Couldn't upload your photo.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
 
   const loadAll = useCallback(async () => {
     try {
@@ -64,12 +87,35 @@ export function MentorDesk({
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
       <div className="animate-fade-in-up flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="eyebrow text-emerald">Mentor Desk</p>
-          <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text sm:text-4xl">
-            Welcome, {mentor.name.split(" ")[0]}
-          </h1>
-          <p className="mt-1.5 text-sm text-text-dim">{mentor.institution}</p>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Avatar name={mentor.name} photoUrl={photoUrl} size="lg" ring />
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={photoUploading}
+              className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-indigo text-[11px] text-white shadow-sm ring-2 ring-bg transition-opacity hover:opacity-90 disabled:opacity-60"
+              aria-label="Upload profile photo"
+              title="Upload profile photo"
+            >
+              {photoUploading ? "…" : "✎"}
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              className="hidden"
+              onChange={handlePhotoSelected}
+            />
+          </div>
+          <div>
+            <p className="eyebrow text-emerald">Mentor Desk</p>
+            <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text sm:text-4xl">
+              Welcome, {mentor.name.split(" ")[0]}
+            </h1>
+            <p className="mt-1.5 text-sm text-text-dim">{mentor.institution}</p>
+            {photoError && <p className="mt-1 text-xs text-coral">{photoError}</p>}
+          </div>
         </div>
         <div className="card-flat flex items-center gap-4 px-5 py-3">
           <div>

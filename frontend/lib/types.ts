@@ -35,6 +35,15 @@ export interface StudentSession {
   email: string | null;
   academic_group: AcademicGroup | null;
   /**
+   * Fixed at signup, never changes after. Drives the permanent in-app
+   * background image (see frontend/lib/aspirantBackgrounds.ts) -- a
+   * SEPARATE concept from academic_group above; do not conflate the two.
+   * Sessions cached in localStorage from before this field existed won't
+   * have it, which simply means no background renders until the student
+   * logs in again.
+   */
+  aspirant_type?: string | null;
+  /**
    * Whether this student has ever saved subject ratings via
    * saveStudentSubjects (see backend POST /students/:id/subjects). Backed
    * by an EXISTS check on student_subjects, not a stored column -- there is
@@ -55,6 +64,8 @@ export interface Mentor {
   institution: string;
   created_at: string;
   groups: AcademicGroup[];
+  /** Nullable -- most mentors won't have uploaded one. Mentor-only; there is no student equivalent. */
+  photo_url?: string | null;
 }
 
 /** The trimmed mentor object returned by POST /mentors/login. */
@@ -63,6 +74,8 @@ export interface MentorSession {
   name: string;
   email: string;
   institution: string;
+  /** Nullable -- most mentors won't have uploaded one. Mentor-only; there is no student equivalent. */
+  photo_url?: string | null;
 }
 
 /** Public mentor info attached to a squad view (no auth fields). */

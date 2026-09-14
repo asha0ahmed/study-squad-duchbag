@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const requireAuth = require('./middleware/auth');
 const { findAutoSquad } = require('./utils/matching');
-const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind } = require('./middleware/upload');
+const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind, singleMentorPhotoUpload } = require('./middleware/upload');
 const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -372,11 +372,53 @@ app.post('/mentors/login', async (req, res) => {
         name: mentor.name,
         email: mentor.email,
         institution: mentor.institution,
+        photo_url: mentor.photo_url,
       },
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong logging in.' });
+  }
+});
+
+// Mentor profile photo -- mentor-only, scoped strictly to the authenticated
+// mentor's own record via req.mentor.mentorId (from the verified JWT, see
+// middleware/auth.js). There is no :id in the URL on purpose: a mentor can
+// never target another mentor's row, even by tampering with the request.
+// Reuses the existing Cloudinary integration (backend/utils/cloudinary.js)
+// already used for Task file / chat attachment uploads.
+app.post('/mentors/me/photo', requireAuth, singleMentorPhotoUpload('photo'), async (req, res) => {
+  const mentorId = req.mentor?.mentorId;
+  if (!mentorId) {
+    return res.status(403).json({ error: 'Only mentors can upload a profile photo.' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'A photo file is required.' });
+  }
+
+  try {
+    let uploaded;
+    try {
+      uploaded = await uploadBuffer(req.file.buffer, {
+        folder: `study-squad/mentors/${mentorId}`,
+        filenameHint: req.file.originalname,
+      });
+    } catch (uploadErr) {
+      console.error('Cloudinary upload failed (mentor photo):', uploadErr);
+      return res.status(502).json({ error: 'Something went wrong uploading your photo.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE mentors SET photo_url = $1, photo_public_id = $2 WHERE id = $3
+       RETURNING id, photo_url`,
+      [uploaded.secure_url, uploaded.public_id, mentorId]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong saving your photo.' });
   }
 });
 
@@ -1646,6 +1688,7 @@ app.post('/login', async (req, res) => {
         name: student.name,
         email: student.email,
         academic_group: student.academic_group,
+        aspirant_type: student.aspirant_type,
         profile_completed: profileCheck.rows[0].has_subjects,
       },
     });

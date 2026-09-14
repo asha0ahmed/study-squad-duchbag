@@ -16,6 +16,7 @@ import "@fontsource/inter/700.css";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { AspirantBackground } from "@/components/layout/AspirantBackground";
 
 export const metadata: Metadata = {
   title: "Study Squad",
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="bg-app min-h-full flex flex-col bg-bg text-text font-sans">
+        <AspirantBackground />
         <Navbar />
         {children}
         <BottomNav />

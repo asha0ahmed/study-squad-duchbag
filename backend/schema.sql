@@ -66,6 +66,11 @@ CREATE TABLE mentors (
   password_hash VARCHAR(255) NOT NULL,
   institution VARCHAR(150) NOT NULL,
   phone VARCHAR(20),
+  -- Mentor-only profile photo, backed by Cloudinary (see
+  -- backend/utils/cloudinary.js). Nullable -- most mentors won't have
+  -- uploaded one. There is no student-side equivalent.
+  photo_url VARCHAR(500),
+  photo_public_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT NOW()
 );
 

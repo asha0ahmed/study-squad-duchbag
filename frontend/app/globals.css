@@ -161,6 +161,20 @@ body {
   }
 }
 
+/* Student in-app background, keyed by aspirant_type (see
+   components/layout/AspirantBackground.tsx). Fixed + negative z-index, same
+   technique as .bg-app's own pseudo-elements above, so it paints behind
+   real page content without needing to touch .bg-app itself. */
+.aspirant-bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 /* Reusable glow blob for hero / card accents */
 .glow-orb {
   position: absolute;

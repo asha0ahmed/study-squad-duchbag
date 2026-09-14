@@ -134,3 +134,51 @@ function singleChatAttachmentUpload(fieldName) {
 module.exports.singleChatAttachmentUpload = singleChatAttachmentUpload;
 module.exports.chatAttachmentKind = chatAttachmentKind;
 module.exports.MAX_CHAT_ATTACHMENT_SIZE_BYTES = MAX_CHAT_ATTACHMENT_SIZE_BYTES;
+
+/**
+ * Mentor profile photo: a single image, mentor-only. Kept as its own
+ * multer instance -- same reasoning as chat attachments above -- so it
+ * can't loosen what's accepted for Task file or chat uploads.
+ */
+const MENTOR_PHOTO_MIMETYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+]);
+
+const MAX_MENTOR_PHOTO_SIZE_BYTES = 5 * 1024 * 1024; // 5MB -- a profile photo, not a document
+
+const mentorPhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_MENTOR_PHOTO_SIZE_BYTES },
+  fileFilter: (req, file, cb) => {
+    if (!MENTOR_PHOTO_MIMETYPES.has(file.mimetype)) {
+      const err = new Error('Only JPG, PNG, or WEBP images are allowed.');
+      err.status = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
+});
+
+function singleMentorPhotoUpload(fieldName) {
+  const middleware = mentorPhotoUpload.single(fieldName);
+  return (req, res, next) => {
+    middleware(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'Image is too large. Maximum size is 5MB.' });
+        }
+        return res.status(400).json({ error: err.message });
+      }
+      if (err) {
+        return res.status(err.status || 400).json({ error: err.message });
+      }
+      next();
+    });
+  };
+}
+
+module.exports.singleMentorPhotoUpload = singleMentorPhotoUpload;
+module.exports.MAX_MENTOR_PHOTO_SIZE_BYTES = MAX_MENTOR_PHOTO_SIZE_BYTES;

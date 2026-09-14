@@ -1,5 +1,81 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 3 — Background feature, mentor photo, and a full re-audit
+
+### Audit (before any code was touched)
+
+Re-inspected the whole repo against the Session 1/2 record above:
+
+- **Email/phone-optional student signup/login** — intact. `students.phone`
+  is nullable with a partial unique index, `email`'s `NOT NULL` was already
+  dropped (`migrations/006_student_email_optional.sql`), and `POST /login`
+  correctly routes on `identifier` (checks for `@`) against either field.
+- **Commerce academic group (8-subject pool, pick any 6)** — intact.
+  `schema.sql` seeds it, `migrations/007_add_commerce_subjects.sql` seeds
+  it idempotently for existing DBs, `frontend/app/profiler/page.tsx` has
+  `REQUIRED_SUBJECT_COUNT.Commerce = 6` vs. "all required" for Science/Arts.
+- **"Commerce Admission" in Aspirant Type** — searched the whole repo; it
+  was never actually present in `ASPIRANT_TYPE_OPTIONS`. The four options
+  (Engineering Admission / Medical Admission / University Admission
+  (General) / HSC Board Exam) were already correctly separate from
+  `academic_group`. Nothing to fix here.
+- **Mentor squad-claiming** — re-verified atomic and correctly filtered
+  (`status = 'locked' AND mentor_id IS NULL`, claim uses
+  `UPDATE ... WHERE mentor_id IS NULL RETURNING *` with a 409 on a lost
+  race). No changes made.
+- **Squad Name column** — asked; declined for this session. Squads remain
+  identified by academic_group + year + aspirant_type only.
+
+### Features added
+
+- **Aspirant-Type Based Permanent Background.** A student's in-app
+  background is now fixed to their `aspirant_type` (existing column,
+  reused — no duplicate field) and shown identically on every login.
+  - `frontend/lib/aspirantBackgrounds.ts` — the mapping.
+  - `frontend/components/layout/AspirantBackground.tsx` — renders it,
+    mounted once in `app/layout.tsx`; shows nothing for mentors or on the
+    public landing page (no student session = no background).
+  - `POST /login` now returns `aspirant_type` on the student session object
+    (it didn't before) so the frontend can key off it without an extra
+    request.
+  - This is a **separate mapping from** the academic_group-keyed gate
+    images already used by the public landing page's hero slider — the two
+    are not merged.
+  - "Engineering Admission" reuses the existing real BUET photo
+    (`public/images/gates/science-buet.webp`). Medical / University
+    (General) / HSC Board Exam use **placeholder graphics** (abstract,
+    not real building photos — see `public/images/gates/README.md`)
+    pending the real DMC/DU/board-exam images being dropped in under the
+    exact same filenames; no code changes needed when that happens.
+- **Mentor Profile Photo** (mentor-only; no student-side equivalent).
+  - `migrations/008_add_mentor_photo.sql` — adds nullable
+    `mentors.photo_url` and `mentors.photo_public_id`.
+  - `POST /mentors/me/photo` — reuses the existing Cloudinary integration
+    (`backend/utils/cloudinary.js`) and the same multer/in-memory pattern
+    already used for chat attachments. Scoped strictly to the
+    authenticated mentor's own record via the verified JWT's `mentorId`
+    (no `:id` in the URL, so a mentor can never target another mentor's
+    row).
+  - `components/ui/Avatar.tsx` gained an optional `photoUrl` prop
+    (backward compatible — no existing caller passes it, so every other
+    avatar in the app is unaffected) and `components/desk/MentorDesk.tsx`
+    now shows the mentor's own photo with an upload control in their
+    desk header ("mentor profile view").
+
+### Verification
+
+Backend: `node --check` on every `.js` file in `backend/`. Frontend:
+`npx tsc --noEmit` and `npx eslint .` across the whole project — both
+clean (zero errors; the only lint warnings are the same pre-existing
+`<img>`-vs-`next/image` warnings already present elsewhere in the
+codebase, e.g. `HeroImageSlider.tsx`).
+
+**Action required on your deployment:** run
+`backend/migrations/008_add_mentor_photo.sql` against your local Postgres
+and the live Neon database (see the migration instructions given
+alongside this delivery). It's additive/nullable and safe to run against
+a database with existing mentors, students, squads, and payments.
+
 ## Session 2 — Task Management, Rating, and the "phone column" root cause
 
 ### Bugs fixed

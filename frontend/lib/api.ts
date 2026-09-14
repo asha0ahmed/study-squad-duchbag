@@ -130,6 +130,24 @@ export function markStudentProfileComplete() {
   });
 }
 
+/**
+ * Locally patches the stored session right after a mentor successfully
+ * uploads a profile photo (see uploadMentorPhoto below), so the new photo
+ * shows immediately without requiring the mentor to log out and back in.
+ * Safe no-op if there's no mentor session on file. Mentor-only -- there is
+ * no student equivalent.
+ */
+export function markMentorPhotoUpdated(photoUrl: string) {
+  if (!isBrowser()) return;
+  const current = getSession();
+  const token = getToken();
+  if (!current || current.role !== "mentor" || !current.mentor || !token) return;
+  setSession(token, {
+    ...current,
+    mentor: { ...current.mentor, photo_url: photoUrl },
+  });
+}
+
 // ---- Admin secret storage ----
 // Deliberately separate from the student/mentor session above (different
 // auth mechanism entirely -- a shared secret header, not a JWT) and kept
@@ -313,6 +331,23 @@ export async function loginMentor(email: string, password: string) {
     { method: "POST", body: { email, password }, skipAuth: true },
   );
   setSession(result.token, { role: "mentor", mentor: result.mentor });
+  return result;
+}
+
+/**
+ * Upload (or replace) the logged-in mentor's own profile photo. Scoped
+ * server-side to the authenticated mentor's own record -- there's no
+ * mentorId in the URL. Mentor-only; there is no student equivalent.
+ */
+export async function uploadMentorPhoto(file: File) {
+  const formData = new FormData();
+  formData.append("photo", file);
+  const result = await requestForm<{ id: number; photo_url: string }>(
+    "/mentors/me/photo",
+    formData,
+    "POST",
+  );
+  markMentorPhotoUpdated(result.photo_url);
   return result;
 }
 
