@@ -44,7 +44,7 @@ const authLimiter = createLimiter({
 });
 const registrationLimiter = createLimiter({
   windowMs: 60 * 60 * 1000,
-  limit: Number(process.env.REGISTRATION_RATE_LIMIT || 5),
+  limit: Number(process.env.REGISTRATION_RATE_LIMIT || 30),
 });
 const adminLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
@@ -60,7 +60,7 @@ const messageLimiter = createLimiter({
 });
 const matchingLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
-  limit: Number(process.env.MATCHING_RATE_LIMIT || 10),
+  limit: Number(process.env.MATCHING_RATE_LIMIT || 100),
 });
 
 // Without this, every request from the frontend (a different origin --
