@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearAdminSecret } from "@/lib/api";
+import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 
-const ADMIN_NAV_ITEMS = [
-  { href: "/admin/students", label: "Student Records", icon: "🎓" },
-  { href: "/admin/mentors", label: "Mentor Records", icon: "🧭" },
-  { href: "/admin/payments", label: "Payments", icon: "💳" },
-  { href: "/admin/squads", label: "Squad Monitoring", icon: "📡" },
-  { href: "/admin/reports", label: "Reports & Analytics", icon: "📊" },
+const ADMIN_NAV_ITEMS: Array<{ href: string; label: string; icon: UiIconName }> = [
+  { href: "/admin/students", label: "Student Records", icon: "award" },
+  { href: "/admin/mentors", label: "Mentor Records", icon: "compass" },
+  { href: "/admin/payments", label: "Payments", icon: "credit-card" },
+  { href: "/admin/squads", label: "Squad Monitoring", icon: "radio" },
+  { href: "/admin/reports", label: "Reports & Analytics", icon: "chart" },
 ];
 
 /**
@@ -58,7 +59,7 @@ export function AdminNavbar() {
                   (active ? "bg-surface-2 text-text" : "text-text-dim hover:text-text")
                 }
               >
-                <span className="mr-1.5">{item.icon}</span>
+                <UiIcon name={item.icon} className="mr-1.5 inline h-4 w-4 align-[-0.15em]" />
                 {item.label}
               </Link>
             );

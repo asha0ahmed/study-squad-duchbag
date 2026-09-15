@@ -364,6 +364,10 @@ export function saveStudentSubjects(studentId: number, subjects: SubjectAssessme
   });
 }
 
+export function getStudentSubjects(studentId: number) {
+  return request<SavedStudentSubject[]>(`/students/${studentId}/subjects`);
+}
+
 // ---- Matching & squad lifecycle ----
 
 export function runMatch(studentId: number) {

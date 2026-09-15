@@ -1,5 +1,6 @@
 "use client";
 
+import { UiIcon } from "@/components/layout/DockIcons";
 import { useCallback, useEffect, useState } from "react";
 import {
   adminApprovePayment,
@@ -105,7 +106,7 @@ export default function AdminPaymentsPage() {
           </div>
         ) : payments.length === 0 ? (
           <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-            <span className="text-2xl">📭</span>
+            <UiIcon name="inbox" className="h-7 w-7 text-text-faint" />
             <p className="text-sm text-text-dim">No payments in this view.</p>
           </div>
         ) : (

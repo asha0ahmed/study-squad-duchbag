@@ -1,5 +1,6 @@
 "use client";
 
+import { UiIcon } from "@/components/layout/DockIcons";
 import { useState } from "react";
 import { ApiError, adminSearchStudents, getAdminSecret } from "@/lib/api";
 import type { AdminStudentRecord } from "@/lib/types";
@@ -72,7 +73,7 @@ export default function AdminStudentsPage() {
         <div className="mt-8">
           {screen.state === "idle" && (
             <div className="card flex flex-col items-center gap-2 px-6 py-12 text-center">
-              <span className="text-2xl">🔍</span>
+              <UiIcon name="search" className="h-7 w-7 text-text-faint" />
               <p className="text-sm text-text-dim">Enter an email, phone number, or transaction ID to search.</p>
             </div>
           )}
@@ -92,7 +93,7 @@ export default function AdminStudentsPage() {
 
           {screen.state === "no-results" && (
             <div className="card flex flex-col items-center gap-2 px-6 py-12 text-center">
-              <span className="text-2xl">📭</span>
+              <UiIcon name="inbox" className="h-7 w-7 text-text-faint" />
               <p className="text-sm text-text-dim">
                 No student matched &quot;{query.trim()}&quot;. Double-check the email, phone number, or
                 transaction ID.

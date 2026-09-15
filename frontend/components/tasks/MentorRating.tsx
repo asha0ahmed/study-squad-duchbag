@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import type { MentorSubmissionView, MentorTask, Task } from "@/lib/types";
 import { FormError } from "@/components/auth/DossierCard";
+import { UiIcon } from "@/components/layout/DockIcons";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -65,7 +66,7 @@ function TaskPicker() {
         </div>
       ) : tasks.length === 0 ? (
         <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-          <span className="text-2xl">🗒️</span>
+          <UiIcon name="file" className="h-7 w-7 text-text-faint" />
           <p className="max-w-md text-sm text-text-dim">
             You haven&apos;t uploaded any tasks yet. Create one from the Tasks tab first.
           </p>
@@ -141,7 +142,7 @@ function SubmissionsForTask({ taskId }: { taskId: number }) {
         </div>
       ) : submissions.length === 0 ? (
         <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-          <span className="text-2xl">🕑</span>
+          <UiIcon name="clock" className="h-7 w-7 text-text-faint" />
           <p className="text-sm text-text-dim">No submissions yet for this task.</p>
         </div>
       ) : (
@@ -214,7 +215,7 @@ function SubmissionRow({
               aria-label={`Rate ${n} out of 5`}
               className={"text-2xl transition-transform active:scale-90 " + (n <= rating ? "" : "opacity-25")}
             >
-              ★
+              <UiIcon name="star" className="h-4 w-4" />
             </button>
           ))}
         </div>

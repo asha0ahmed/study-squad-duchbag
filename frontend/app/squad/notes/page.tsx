@@ -17,6 +17,7 @@ import {
 import type { SquadMessage } from "@/lib/types";
 import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
+import { UiIcon } from "@/components/layout/DockIcons";
 
 const POLL_INTERVAL_MS = 7000;
 const MAX_RECORDING_SECONDS = 120;
@@ -300,7 +301,7 @@ function SquadNotesContent() {
         >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-              <span className="text-2xl">👋</span>
+              <UiIcon name="message" className="h-7 w-7 text-text-faint" />
               <p className="text-sm text-text-faint">No notes yet. Say hello.</p>
             </div>
           ) : (
@@ -367,7 +368,7 @@ function SquadNotesContent() {
             aria-label="Send an image"
             title="Send an image"
           >
-            🖼️
+            <UiIcon name="image" className="h-5 w-5" />
           </button>
 
           {isRecording ? (
@@ -402,7 +403,7 @@ function SquadNotesContent() {
                 aria-label="Record a voice message"
                 title="Record a voice message"
               >
-                🎤
+                <UiIcon name="mic" className="h-5 w-5" />
               </button>
               <button type="submit" disabled={sending || !draft.trim()} className="btn btn-primary !px-5">
                 Send

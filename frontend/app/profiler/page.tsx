@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { UiIcon } from "@/components/layout/DockIcons";
 import {
   ApiError,
   getSession,
+  getStudentSubjects,
   markStudentProfileComplete,
   saveStudentSubjects,
   StoredSession,
@@ -46,6 +48,7 @@ export default function ProfilerPage() {
   const [rows, setRows] = useState<Record<number, SubjectRowState>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -54,6 +57,43 @@ export default function ProfilerPage() {
     setSession(s);
     setChecked(true);
   }, []);
+
+  useEffect(() => {
+    const studentId = session?.student?.id;
+    if (!studentId) return;
+
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- show a loading state while synchronizing with the saved backend profile
+    setProfileLoading(true);
+    getStudentSubjects(studentId)
+      .then((savedSubjects) => {
+        if (cancelled) return;
+        setRows(
+          Object.fromEntries(
+            savedSubjects.map((subject) => [
+              subject.subject_id,
+              {
+                selected: true,
+                proficiency: subject.proficiency,
+                improvement_priority: subject.improvement_priority,
+              },
+            ]),
+          ),
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.message : "Couldn't load your saved profile.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.student?.id]);
 
   useEffect(() => {
     if (checked && (!session || session.role !== "student")) {
@@ -166,11 +206,19 @@ export default function ProfilerPage() {
     );
   }
 
+  if (profileLoading) {
+    return (
+      <main className="flex flex-1 items-center justify-center">
+        <p className="text-sm text-text-dim">Loading your saved profile…</p>
+      </main>
+    );
+  }
+
   if (saved) {
     return (
       <main className="flex flex-1 items-center justify-center px-6 py-16">
         <div className="card w-full max-w-md px-6 py-10 text-center">
-          <span className="text-3xl">✅</span>
+          <UiIcon name="check" className="h-9 w-9 text-emerald" />
           <p className="mt-3 eyebrow text-emerald">Profile saved</p>
           <h1 className="mt-2 font-display text-3xl font-extrabold text-text">
             Ready to find your squad

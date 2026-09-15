@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, getStudentTasks, submitTaskAnswer } from "@/lib/api";
 import type { StudentSession, StudentTaskView } from "@/lib/types";
 import { FormError } from "@/components/auth/DossierCard";
+import { UiIcon } from "@/components/layout/DockIcons";
 
 const ACCEPTED_TYPES = ".pdf,.jpg,.jpeg,.png,.webp";
 
@@ -64,7 +65,7 @@ export function StudentTasks({ student }: { student: StudentSession }) {
         </div>
       ) : tasks.length === 0 ? (
         <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-          <span className="text-2xl">📭</span>
+          <UiIcon name="inbox" className="h-7 w-7 text-text-faint" />
           <p className="text-sm text-text-dim">
             No tasks yet. Once your mentor assigns one to your squad, it&apos;ll show up here.
           </p>
@@ -137,7 +138,7 @@ function TaskCard({
           rel="noopener noreferrer"
           className="btn btn-secondary !py-2 mt-3 inline-flex text-sm"
         >
-          📎 View task file ({fileKindLabel(task.file_format)})
+          <UiIcon name="paperclip" className="mr-2 h-4 w-4" />View task file ({fileKindLabel(task.file_format)})
         </a>
 
         <div className="mt-5 border-t border-border-soft pt-4">
@@ -155,8 +156,8 @@ function TaskCard({
                 View your submission
               </a>
               {task.submission.rating ? (
-                <span className="text-sm font-semibold text-emerald">
-                  ★ Rated {task.submission.rating}/5
+                <span className="flex items-center gap-1 text-sm font-semibold text-emerald">
+                  <UiIcon name="star" className="h-4 w-4" /> Rated {task.submission.rating}/5
                   {task.submission.feedback ? ` — ${task.submission.feedback}` : ""}
                 </span>
               ) : (

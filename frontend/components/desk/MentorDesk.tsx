@@ -14,6 +14,7 @@ import type { MentorSession, MentorSquad, Squad } from "@/lib/types";
 import { CoverageMatrix } from "@/components/squad/CoverageMatrix";
 import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
+import { UiIcon } from "@/components/layout/DockIcons";
 
 type Tab = "mine" | "browse";
 
@@ -98,7 +99,7 @@ export function MentorDesk({
               aria-label="Upload profile photo"
               title="Upload profile photo"
             >
-              {photoUploading ? "…" : "✎"}
+              {photoUploading ? "…" : <UiIcon name="edit" className="h-3.5 w-3.5" />}
             </button>
             <input
               ref={photoInputRef}
@@ -185,7 +186,7 @@ function MySquadsTab({ squads }: { squads: MentorSquad[] }) {
   if (squads.length === 0) {
     return (
       <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-        <span className="text-2xl">📭</span>
+        <UiIcon name="inbox" className="h-7 w-7 text-text-faint" />
         <p className="text-sm text-text-dim">
           You haven&apos;t claimed any squads yet. Check the Browse Open Squads tab.
         </p>
@@ -236,7 +237,7 @@ function BrowseTab({
   if (squads.length === 0) {
     return (
       <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-        <span className="text-2xl">🔍</span>
+        <UiIcon name="search" className="h-7 w-7 text-text-faint" />
         <p className="max-w-md text-sm text-text-dim">
           No open squads right now. This is either because there aren&apos;t any locked,
           unassigned squads in your groups at the moment, or because a group you

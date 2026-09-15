@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 
 // Self-hosted fonts (bundled from npm) instead of next/font/google, since
 // this sandbox can't reach fonts.googleapis.com at build time.
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
     "Find your study squad — peer-matched six-member study teams for HSC and admission-test aspirants.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="bg-app min-h-full flex flex-col bg-bg text-text font-sans">

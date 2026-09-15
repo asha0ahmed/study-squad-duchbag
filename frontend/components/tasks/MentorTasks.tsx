@@ -11,6 +11,7 @@ import {
 import type { MentorSession, MentorSquad, MentorTask } from "@/lib/types";
 import { FormError, SubmitButton } from "@/components/auth/DossierCard";
 import { TextField } from "@/components/auth/FormFields";
+import { UiIcon } from "@/components/layout/DockIcons";
 
 const ACCEPTED_TYPES = ".pdf,.jpg,.jpeg,.png,.webp";
 
@@ -95,7 +96,7 @@ export function MentorTasks({
 
           {squads.length === 0 ? (
             <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-              <span className="text-2xl">🧭</span>
+              <UiIcon name="compass" className="h-7 w-7 text-text-faint" />
               <p className="max-w-md text-sm text-text-dim">
                 You don&apos;t have any claimed squads yet. Claim one from Browse Open Squads
                 before uploading a task.
@@ -103,7 +104,7 @@ export function MentorTasks({
             </div>
           ) : tasks.length === 0 ? (
             <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-              <span className="text-2xl">📭</span>
+              <UiIcon name="inbox" className="h-7 w-7 text-text-faint" />
               <p className="text-sm text-text-dim">
                 No tasks uploaded yet. Use &quot;Upload Task&quot; above to give your first one.
               </p>
@@ -236,7 +237,7 @@ function UploadTaskForm({
           onClick={() => fileInputRef.current?.click()}
           className="btn btn-secondary !py-2.5 self-start text-sm"
         >
-          {file ? `📎 ${file.name}` : "Choose PDF, JPG, or PNG"}
+          {file ? <><UiIcon name="paperclip" className="mr-2 inline h-4 w-4" />{file.name}</> : "Choose PDF, JPG, or PNG"}
         </button>
         <input
           ref={fileInputRef}

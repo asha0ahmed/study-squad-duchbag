@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { UiIcon } from "@/components/layout/DockIcons";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -112,7 +113,7 @@ export default function SquadPage() {
     return (
       <main className="flex flex-1 items-center justify-center px-6 py-16">
         <div className="card w-full max-w-md px-6 py-10 text-center">
-          <span className="text-3xl">🧭</span>
+          <UiIcon name="compass" className="h-9 w-9 text-cyan" />
           <p className="mt-3 font-display text-xl font-bold text-text">No squad yet</p>
           <p className="mt-1.5 text-sm text-text-dim">Head over to find your six-person squad.</p>
           <Link href="/squad/find" className="btn btn-primary mt-5 inline-flex">

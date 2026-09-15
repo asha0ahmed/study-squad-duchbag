@@ -15,6 +15,13 @@ npm install
 cp .env.example .env      # then fill in DB_*, JWT_SECRET, ADMIN_SECRET
 ```
 
+The API includes per-IP rate limits. Login failures are limited to 10 per
+15 minutes, registration to 5 per hour, file uploads to 20 per 15 minutes,
+chat messages to 60 per minute, matching to 10 per 15 minutes, admin routes
+to 60 per 15 minutes, and all routes have a 300-request per 15-minute safety
+limit. These defaults can be adjusted in `.env`; `TRUST_PROXY=true` should
+only be used when the server is behind one trusted reverse proxy.
+
 Create the database and load the schema (creates all tables, including
 the `phone` column added to `mentors` in this update):
 

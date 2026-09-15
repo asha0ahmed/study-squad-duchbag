@@ -1,5 +1,6 @@
 "use client";
 
+import { UiIcon } from "@/components/layout/DockIcons";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, adminApproveMentorGroup, adminListMentors, getAdminSecret } from "@/lib/api";
 import type { AdminMentorRecord } from "@/lib/types";
@@ -69,7 +70,7 @@ export default function AdminMentorsPage() {
           </div>
         ) : mentors.length === 0 ? (
           <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
-            <span className="text-2xl">📭</span>
+            <UiIcon name="inbox" className="h-7 w-7 text-text-faint" />
             <p className="text-sm text-text-dim">No mentors have registered yet.</p>
           </div>
         ) : (

@@ -1,34 +1,35 @@
 import Link from "next/link";
+import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 
-const SECTIONS = [
+const SECTIONS: Array<{ href: string; icon: UiIconName; title: string; desc: string; comingSoon?: boolean }> = [
   {
     href: "/admin/students",
-    icon: "🎓",
+    icon: "award",
     title: "Student Records",
     desc: "Search a student by email, phone number, or transaction ID.",
   },
   {
     href: "/admin/mentors",
-    icon: "🧭",
+    icon: "compass",
     title: "Mentor Records",
     desc: "See every mentor, their institution, groups, and assigned squads.",
   },
   {
     href: "/admin/payments",
-    icon: "💳",
+    icon: "credit-card",
     title: "Payment Review",
     desc: "Approve or reject submitted mentor-fee payments.",
   },
   {
     href: "/admin/squads",
-    icon: "📡",
+    icon: "radio",
     title: "Squad Monitoring",
     desc: "Supervise squad activity and mentor coverage.",
     comingSoon: true,
   },
   {
     href: "/admin/reports",
-    icon: "📊",
+    icon: "chart",
     title: "Reports & Analytics",
     desc: "Platform-wide trends across students, squads, and mentors.",
     comingSoon: true,
@@ -55,7 +56,7 @@ export default function AdminHomePage() {
               className="card-hover card flex flex-col gap-2 p-5"
             >
               <div className="flex items-center justify-between">
-                <span className="text-2xl">{section.icon}</span>
+                <UiIcon name={section.icon} className="h-7 w-7" />
                 {section.comingSoon && <span className="badge badge-neutral">Coming soon</span>}
               </div>
               <span className="font-display text-lg font-bold text-text">{section.title}</span>

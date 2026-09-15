@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { UiIcon } from "@/components/layout/DockIcons";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError, getSession, joinViaInvite, StoredSession } from "@/lib/api";
@@ -49,7 +50,7 @@ export default function InviteJoinPage() {
     return (
       <main className="flex flex-1 items-center justify-center px-6 py-16">
         <div className="card w-full max-w-md px-6 py-10 text-center">
-          <span className="text-3xl">🎉</span>
+          <UiIcon name="sparkle" className="h-9 w-9 text-emerald" />
           <p className="mt-3 eyebrow text-emerald">You&apos;re in</p>
           <h1 className="mt-2 font-display text-3xl font-extrabold text-text">Welcome to the squad</h1>
           <Link href="/squad" className="btn btn-primary mt-6 inline-flex">

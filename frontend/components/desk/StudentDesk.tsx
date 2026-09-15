@@ -5,6 +5,7 @@ import { ApiError, getMySquad } from "@/lib/api";
 import type { StudentSession, StudentSquadView } from "@/lib/types";
 import { StatusBadge } from "@/components/squad/StatusBadge";
 import { Avatar } from "@/components/ui/Avatar";
+import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 import { useCallback, useEffect, useState } from "react";
 
 const MEMBERS_NEEDED_TO_ACTIVATE = 4;
@@ -78,7 +79,7 @@ export function StudentDesk({ student }: { student: StudentSession }) {
           </div>
         ) : !squad ? (
           <div className="relative z-10 flex flex-col items-center gap-3 py-6 text-center">
-            <span className="text-3xl">🧭</span>
+            <UiIcon name="compass" className="h-9 w-9 text-cyan" />
             <p className="font-display text-xl font-bold text-text">
               You haven&apos;t found your squad yet
             </p>
@@ -185,21 +186,21 @@ export function StudentDesk({ student }: { student: StudentSession }) {
           href="/profiler"
           label="The Profiler"
           desc="Rate your subjects"
-          icon="📊"
+          icon="chart"
           accent="from-indigo to-violet"
         />
         <DeskLink
           href="/squad/find"
           label="Find My Squad"
           desc={squad ? "View your match" : "Trigger matching"}
-          icon="🎯"
+          icon="target"
           accent="from-cyan to-indigo"
         />
         <DeskLink
           href="/squad/notes"
           label="Squad Notes"
           desc="Talk to your squad"
-          icon="💬"
+          icon="message"
           accent="from-emerald to-cyan"
         />
       </div>
@@ -217,7 +218,7 @@ function DeskLink({
   href: string;
   label: string;
   desc: string;
-  icon: string;
+  icon: UiIconName;
   accent: string;
 }) {
   return (
@@ -225,7 +226,7 @@ function DeskLink({
       <span
         className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${accent} text-lg shadow-[0_8px_18px_-8px_rgba(99,102,241,0.6)]`}
       >
-        {icon}
+        <UiIcon name={icon} className="h-5 w-5" />
       </span>
       <div className="min-w-0">
         <span className="block font-display text-base font-bold text-text">{label}</span>

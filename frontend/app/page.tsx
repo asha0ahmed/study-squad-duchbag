@@ -4,6 +4,7 @@ import type { AcademicGroup } from "@/lib/types";
 import { HomeRedirect } from "@/components/layout/HomeRedirect";
 import { RunningSquadsSection } from "@/components/landing/RunningSquadsSection";
 import { HeroImageSlider } from "@/components/landing/HeroImageSlider";
+import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 
 const MEMBERS = ["Rafi", "Anika", "Tanvir", "Nusrat", "Farhan", "Mim"];
 
@@ -14,22 +15,22 @@ const ACADEMIC_GROUPS = Object.keys(SUBJECTS_BY_GROUP) as AcademicGroup[];
 
 const GROUP_META: Record<
   AcademicGroup,
-  { icon: string; blurb: string; accent: string; gateImage?: string }
+  { icon: UiIconName; blurb: string; accent: string; gateImage?: string }
 > = {
   Science: {
-    icon: "🧪",
+    icon: "flask",
     blurb: "Physics, Chemistry, Higher Math and more — squads built so your gaps get covered.",
     accent: "from-indigo to-cyan",
     gateImage: "/images/gates/science-buet.webp",
   },
   Arts: {
-    icon: "📚",
+    icon: "books",
     blurb: "History, Economics, Civics and more — matched with scholars who balance out your strengths.",
     accent: "from-violet to-coral",
     gateImage: "/images/gates/arts-jahangirnagar.webp",
   },
   Commerce: {
-    icon: "📈",
+    icon: "trend",
     blurb: "Accounting, Finance, Marketing and more — pick 6 subjects and match with scholars who balance out your strengths.",
     accent: "from-emerald to-cyan",
     // No gate image yet -- see Task 2 (aspirant-type backgrounds); add one
@@ -61,7 +62,7 @@ export default function Home() {
 
         <div className="relative z-10 grid items-center gap-16 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10 xl:gap-16">
           <div className="animate-fade-in-up lg:pr-4">
-            <span className="badge badge-indigo lg:mb-2 lg:px-4 lg:py-2 lg:text-sm">✦ Peer-matched squads, not random chats</span>
+            <span className="badge badge-indigo inline-flex items-center gap-1.5 lg:mb-2 lg:px-4 lg:py-2 lg:text-sm"><UiIcon name="sparkle" className="h-3.5 w-3.5" />Peer-matched squads, not random chats</span>
             <h1 className="mt-5 font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-text sm:text-6xl lg:mt-6 lg:text-[4.3rem] lg:leading-[0.92] xl:text-[5rem]">
               Your squad is <span className="text-gradient-brand">waiting</span> for you.
             </h1>
@@ -140,7 +141,7 @@ export default function Home() {
               </div>
 
               <div className="relative z-10 mt-5 flex items-center gap-2 rounded-xl border border-coral/30 bg-coral/10 px-3.5 py-2.5 lg:mt-7 lg:gap-3 lg:px-4 lg:py-3">
-                <span className="text-base lg:text-xl">🔥</span>
+                <UiIcon name="trend" className="h-5 w-5 text-coral" />
                 <span className="text-sm font-medium text-text lg:text-[0.96rem]">18-day squad streak — keep it going</span>
               </div>
             </div>
@@ -190,7 +191,7 @@ export default function Home() {
                 />
                 <div className="relative z-10">
                   <div className="flex items-center justify-between">
-                    <span className="text-2xl">{meta.icon}</span>
+                    <UiIcon name={meta.icon} className="h-7 w-7" />
                     <span className={"badge " + (active ? "badge-emerald" : "badge-neutral")}>
                       {active ? "Matching now" : "Coming soon"}
                     </span>
@@ -235,24 +236,24 @@ export default function Home() {
             {
               title: "Matched, not random",
               desc: "Your subject strengths and gaps decide who joins your six-person squad — everyone covers for everyone.",
-              icon: "🎯",
+              icon: "target",
               accent: "text-cyan",
             },
             {
               title: "Built-in accountability",
               desc: "Shared progress and squad-wide activity keep everyone honest — this isn't a group chat that goes quiet.",
-              icon: "⚡",
+              icon: "lightning",
               accent: "text-emerald",
             },
             {
               title: "A mentor in your corner",
               desc: "Every locked squad gets a mentor who can see your coverage matrix and guide the group's prep.",
-              icon: "🧭",
+              icon: "compass",
               accent: "text-violet",
             },
           ].map((f) => (
             <div key={f.title} className="card-hover card p-6 lg:rounded-[1.5rem] lg:p-7">
-              <span className="text-2xl lg:text-3xl">{f.icon}</span>
+              <UiIcon name={f.icon as UiIconName} className="h-7 w-7 lg:h-8 lg:w-8" />
               <h3 className={"mt-4 font-display text-lg font-bold text-text lg:text-xl"}>{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-text-dim lg:text-[0.96rem] lg:leading-7">{f.desc}</p>
             </div>

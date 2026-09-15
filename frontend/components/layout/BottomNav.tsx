@@ -22,6 +22,8 @@ import {
   SquadIcon,
   StarIcon,
   TaskIcon,
+  UiIcon,
+  type UiIconName,
 } from "./DockIcons";
 
 function initials(name: string) {
@@ -53,7 +55,7 @@ type SecondaryItem = {
   href: string;
   label: string;
   desc: string;
-  icon: string;
+  icon: UiIconName;
   dot?: boolean;
   badge?: { label: string; tone: string } | null;
 };
@@ -235,35 +237,35 @@ export function BottomNav() {
   const extrasLoading = isStudent && !profileIncomplete && studentSquad === undefined;
   const badge = paymentBadge(payment);
 
-  let primaryCta: { href: string; label: string; icon: string } | null = null;
+  let primaryCta: { href: string; label: string; icon: UiIconName } | null = null;
   if (isStudent) {
     if (profileIncomplete) {
-      primaryCta = { href: "/profiler", label: "Complete Your Profile", icon: "📊" };
+      primaryCta = { href: "/profiler", label: "Complete Your Profile", icon: "chart" };
     } else if (studentSquad) {
-      primaryCta = { href: "/squad", label: "My Squad", icon: "🧭" };
+      primaryCta = { href: "/squad", label: "My Squad", icon: "compass" };
     } else {
-      primaryCta = { href: "/squad/find", label: "Find My Squad", icon: "🎯" };
+      primaryCta = { href: "/squad/find", label: "Find My Squad", icon: "target" };
     }
   } else if (isMentor) {
-    primaryCta = { href: "/desk?tab=browse", label: "Browse Open Squads", icon: "🧭" };
+    primaryCta = { href: "/desk?tab=browse", label: "Browse Open Squads", icon: "compass" };
   }
 
   const studentSecondary: SecondaryItem[] = profileIncomplete
     ? []
     : [
-        { href: "/squad/find", label: "Find Squad", desc: "See a fresh squad suggestion", icon: "🎯" },
-        { href: "/profiler", label: "My Profile", desc: "Edit your subject ratings", icon: "👤" },
+        { href: "/squad/find", label: "Find Squad", desc: "See a fresh squad suggestion", icon: "target" },
+        { href: "/profiler", label: "My Profile", desc: "Edit your subject ratings", icon: "user" },
         {
           href: "/squad/subscribe",
           label: "Subscribe",
           desc: "Mentor-fee payment status",
-          icon: "💳",
+          icon: "credit-card",
           badge,
         },
       ];
 
   const mentorSecondary: SecondaryItem[] = [
-    { href: "/desk?tab=browse", label: "Browse Open Squads", desc: "Claim a squad to mentor", icon: "🔍" },
+    { href: "/desk?tab=browse", label: "Browse Open Squads", desc: "Claim a squad to mentor", icon: "search" },
   ];
 
   const secondaryItems = isStudent ? studentSecondary : isMentor ? mentorSecondary : [];
@@ -315,7 +317,7 @@ export function BottomNav() {
                   onClick={() => setMoreOpen(false)}
                   className="mt-3 flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo to-violet px-5 text-[15px] font-bold text-white shadow-[0_10px_24px_-10px_rgba(99,102,241,0.8)] transition-transform active:scale-[0.98]"
                 >
-                  <span className="text-lg">{primaryCta.icon}</span>
+                  <UiIcon name={primaryCta.icon} className="h-5 w-5" />
                   {primaryCta.label}
                 </Link>
               )}
@@ -341,7 +343,7 @@ export function BottomNav() {
                         }
                       >
                         <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-surface-2 text-lg">
-                          {item.icon}
+                          <UiIcon name={item.icon} className="h-5 w-5" />
                           {item.dot && (
                             <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-bg-raised bg-coral" />
                           )}

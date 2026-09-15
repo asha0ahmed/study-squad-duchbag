@@ -3,6 +3,7 @@ const cors = require('cors');
 const pool = require('./db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { rateLimit } = require('express-rate-limit');
 const requireAuth = require('./middleware/auth');
 const { findAutoSquad } = require('./utils/matching');
 const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind, singleMentorPhotoUpload } = require('./middleware/upload');
@@ -10,13 +11,66 @@ const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Keep the API usable under normal frontend traffic while limiting the
+// endpoints that are expensive or attractive to abuse. The default memory
+// store is appropriate for one backend process; deployments with multiple
+// instances should provide an external express-rate-limit store so limits
+// are shared across instances.
+app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
+
+const rateLimitHandler = (req, res) => {
+  res.status(429).json({ error: 'Too many requests. Please try again later.' });
+};
+
+function createLimiter({ windowMs, limit, message = rateLimitHandler, skipSuccessfulRequests = false }) {
+  return rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    skipSuccessfulRequests,
+    handler: message,
+  });
+}
+
+const apiLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.API_RATE_LIMIT || 300),
+});
+const authLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.AUTH_RATE_LIMIT || 10),
+  skipSuccessfulRequests: true,
+});
+const registrationLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000,
+  limit: Number(process.env.REGISTRATION_RATE_LIMIT || 5),
+});
+const adminLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.ADMIN_RATE_LIMIT || 60),
+});
+const uploadLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.UPLOAD_RATE_LIMIT || 20),
+});
+const messageLimiter = createLimiter({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.MESSAGE_RATE_LIMIT || 60),
+});
+const matchingLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.MATCHING_RATE_LIMIT || 10),
+});
+
 // Without this, every request from the frontend (a different origin --
 // e.g. localhost:3001 -- than this server's localhost:3000) is blocked by
 // the browser's CORS policy before it even reaches these routes. Tools
 // like curl don't enforce CORS, so this gap doesn't show up in
 // server-to-server testing -- only in an actual browser.
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(apiLimiter);
 
 // Strips spaces/dashes from a student-entered phone number so the same
 // number typed slightly differently ("017 1234 5678" vs "01712345678")
@@ -154,7 +208,7 @@ app.get('/db-test', async (req, res) => {
   }
 });
 
-app.post('/students', async (req, res) => {
+app.post('/students', registrationLimiter, async (req, res) => {
     const { name, email, phone, password, institution, year, academic_group, aspirant_type, inviteCode } = req.body;
 
   if (!name || !password) {
@@ -244,7 +298,7 @@ app.post('/students', async (req, res) => {
   }
 });
 
-app.post('/mentors', async (req, res) => {
+app.post('/mentors', registrationLimiter, async (req, res) => {
   const { name, email, password, institution, groups, phone } = req.body;
 
   if (!name || !email || !password || !institution) {
@@ -312,7 +366,7 @@ app.post('/mentors', async (req, res) => {
   }
 });
 
-app.patch('/mentors/:mentorId/groups/:groupName/approve', async (req, res) => {
+app.patch('/mentors/:mentorId/groups/:groupName/approve', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required.' });
@@ -338,7 +392,7 @@ app.patch('/mentors/:mentorId/groups/:groupName/approve', async (req, res) => {
   }
 });
 
-app.post('/mentors/login', async (req, res) => {
+app.post('/mentors/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -387,7 +441,7 @@ app.post('/mentors/login', async (req, res) => {
 // never target another mentor's row, even by tampering with the request.
 // Reuses the existing Cloudinary integration (backend/utils/cloudinary.js)
 // already used for Task file / chat attachment uploads.
-app.post('/mentors/me/photo', requireAuth, singleMentorPhotoUpload('photo'), async (req, res) => {
+app.post('/mentors/me/photo', requireAuth, uploadLimiter, singleMentorPhotoUpload('photo'), async (req, res) => {
   const mentorId = req.mentor?.mentorId;
   if (!mentorId) {
     return res.status(403).json({ error: 'Only mentors can upload a profile photo.' });
@@ -419,6 +473,27 @@ app.post('/mentors/me/photo', requireAuth, singleMentorPhotoUpload('photo'), asy
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong saving your photo.' });
+  }
+});
+
+app.get('/students/:id/subjects', requireAuth, async (req, res) => {
+  const studentId = parseInt(req.params.id, 10);
+  if (studentId !== req.student.studentId) {
+    return res.status(403).json({ error: 'You can only view your own subjects.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, student_id, subject_id, proficiency, improvement_priority
+       FROM student_subjects
+       WHERE student_id = $1
+       ORDER BY subject_id`,
+      [studentId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading your subjects.' });
   }
 });
 
@@ -556,7 +631,7 @@ app.get('/students/:id/payments/latest', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/admin/payments', async (req, res) => {
+app.get('/admin/payments', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required.' });
@@ -588,7 +663,7 @@ app.get('/admin/payments', async (req, res) => {
   }
 });
 
-app.patch('/admin/payments/:paymentId/approve', async (req, res) => {
+app.patch('/admin/payments/:paymentId/approve', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required.' });
@@ -613,7 +688,7 @@ app.patch('/admin/payments/:paymentId/approve', async (req, res) => {
   }
 });
 
-app.patch('/admin/payments/:paymentId/reject', async (req, res) => {
+app.patch('/admin/payments/:paymentId/reject', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required.' });
@@ -644,7 +719,7 @@ app.patch('/admin/payments/:paymentId/reject', async (req, res) => {
 // have to say which kind it is, since a student's phone number only
 // exists as `sender_phone` on one of their payments, not as a column on
 // `students` itself.
-app.get('/admin/students/search', async (req, res) => {
+app.get('/admin/students/search', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required.' });
@@ -707,7 +782,7 @@ app.get('/admin/students/search', async (req, res) => {
 
 // Admin: list every mentor with their groups (and approval status) and
 // whichever squad(s) they're currently assigned to.
-app.get('/admin/mentors', async (req, res) => {
+app.get('/admin/mentors', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required.' });
@@ -744,7 +819,7 @@ app.get('/admin/mentors', async (req, res) => {
   }
 });
 
-app.post('/students/:id/match', requireAuth, async (req, res) => {
+app.post('/students/:id/match', requireAuth, matchingLimiter, async (req, res) => {
   const studentId = parseInt(req.params.id);
 
   if (studentId !== req.student.studentId) {
@@ -1320,7 +1395,7 @@ app.patch('/squads/:squadId/reassign-mentor', async (req, res) => {
 });
 
 
-app.post('/squads/:squadId/messages', requireAuth, singleChatAttachmentUpload('file'), async (req, res) => {
+app.post('/squads/:squadId/messages', requireAuth, messageLimiter, singleChatAttachmentUpload('file'), async (req, res) => {
   const squadId = parseInt(req.params.squadId);
   const { message, duration } = req.body;
 
@@ -1631,7 +1706,7 @@ app.get('/squads/:squadId', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', authLimiter, async (req, res) => {
   // Accepts either the student's email or phone number in `identifier`.
   // Still accepts a plain `email` field too so this stays backward
   // compatible with any existing caller that hasn't switched over yet.
@@ -1698,7 +1773,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.post('/admin/expire-stale-squads', async (req, res) => {
+app.post('/admin/expire-stale-squads', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required.' });
@@ -1732,7 +1807,7 @@ async function getStudentSquadId(studentId) {
 }
 
 // Mentor uploads a task file and assigns it to one of their own squads.
-app.post('/tasks', requireAuth, singleFileUpload('file'), async (req, res) => {
+app.post('/tasks', requireAuth, uploadLimiter, singleFileUpload('file'), async (req, res) => {
   const mentorId = req.mentor?.mentorId;
   if (!mentorId) {
     return res.status(403).json({ error: 'Only mentors can create tasks.' });
@@ -1894,7 +1969,7 @@ app.get('/students/:id/tasks', requireAuth, async (req, res) => {
 });
 
 // Student uploads/replaces their answer for one task.
-app.post('/tasks/:taskId/submit', requireAuth, singleFileUpload('file'), async (req, res) => {
+app.post('/tasks/:taskId/submit', requireAuth, uploadLimiter, singleFileUpload('file'), async (req, res) => {
   const studentId = req.student?.studentId;
   if (!studentId) {
     return res.status(403).json({ error: 'Only students can submit task answers.' });
