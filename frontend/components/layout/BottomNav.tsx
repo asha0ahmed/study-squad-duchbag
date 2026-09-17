@@ -16,6 +16,7 @@ import {
   CloseIcon,
   DashboardIcon,
   MoreIcon,
+  NoteIcon,
   SquadIcon,
   StarIcon,
   TaskIcon,
@@ -187,6 +188,13 @@ export function BottomNav() {
         match: (p) => (isMentor ? p === "/rating" : p === "/squad"),
       },
       {
+        key: "note",
+        href: "https://noteviewe.netlify.app",
+        label: "Note",
+        icon: NoteIcon,
+        match: () => false,
+      },
+      {
         key: "more",
         href: "#more",
         label: "More",
@@ -198,14 +206,14 @@ export function BottomNav() {
   );
 
   const activeIndex = useMemo(() => {
-    if (moreOpen) return 3;
+    if (moreOpen) return 4;
     const idx = primaryItems.findIndex((item) => item.match(pathname));
     return idx;
   }, [primaryItems, pathname, moreOpen]);
 
   // ---- Secondary destinations, shown inside the More sheet ----
   // These are the app's existing secondary routes -- not duplicates of the
-  // four primary dock items, and not invented destinations.
+  // five primary dock items, and not invented destinations.
 
   const extrasLoading = isStudent && !profileIncomplete && studentSquad === undefined;
   const badge = paymentBadge(payment);
