@@ -293,6 +293,14 @@ function SquadNotesContent() {
         <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
           The Ledger
         </h1>
+        <a
+          href="https://noteviewe.netlify.app"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex w-fit text-sm font-semibold text-cyan underline decoration-cyan/40 underline-offset-4 transition-colors hover:text-text"
+        >
+          Open Note Viewer
+        </a>
 
         <div
           ref={scrollRef}

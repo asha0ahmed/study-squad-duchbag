@@ -18,6 +18,7 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { AspirantBackground } from "@/components/layout/AspirantBackground";
+import { SquadChatFloatingButton } from "@/components/layout/SquadChatFloatingButton";
 
 export const metadata: Metadata = {
   title: "Study Squad",
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Navbar />
         {children}
         <BottomNav />
+        <SquadChatFloatingButton />
       </body>
     </html>
   );

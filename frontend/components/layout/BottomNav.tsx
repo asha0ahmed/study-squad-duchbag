@@ -6,9 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getLatestPayment,
   getMySquad,
-  getNotesLastSeen,
   getSession,
-  getSquadMessages,
   logout,
   needsProfiler,
   StoredSession,
@@ -18,7 +16,6 @@ import {
   CloseIcon,
   DashboardIcon,
   MoreIcon,
-  NoteIcon,
   SquadIcon,
   StarIcon,
   TaskIcon,
@@ -71,7 +68,6 @@ export function BottomNav() {
   // once the More sheet is actually opened.
   const [studentSquad, setStudentSquad] = useState<StudentSquadView | null | undefined>(undefined);
   const [payment, setPayment] = useState<Payment | null | undefined>(undefined);
-  const [notesUnread, setNotesUnread] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of an external system (localStorage) on route change
@@ -99,7 +95,6 @@ export function BottomNav() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resets local UI state when the identity of the logged-in student changes, not a synchronous render-time write
     setStudentSquad(undefined);
     setPayment(undefined);
-    setNotesUnread(false);
   }, [studentId]);
 
   useEffect(() => {
@@ -120,9 +115,7 @@ export function BottomNav() {
     };
   }, [session]);
 
-  // Notes are relevant to both roles as soon as the squad chat exists, so
-  // fetch that (and, for students, the curated Subscribe/Find data) lazily
-  // once the sheet opens -- not on every page load site-wide.
+  // Fetch the curated Subscribe/Find data lazily, only once the More sheet opens.
   useEffect(() => {
     if (!moreOpen || !isStudent || profileIncomplete || !studentId) return;
     if (studentSquad !== undefined) return;
@@ -137,19 +130,6 @@ export function BottomNav() {
 
       if (squadResult.status === "fulfilled") {
         setStudentSquad(squadResult.value);
-        if (squadResult.value.squad.status === "locked") {
-          try {
-            const messages = await getSquadMessages(squadResult.value.squad.id);
-            if (cancelled) return;
-            const latest = messages[messages.length - 1];
-            if (latest) {
-              const seen = getNotesLastSeen(squadResult.value.squad.id);
-              setNotesUnread(!seen || new Date(latest.created_at) > new Date(seen));
-            }
-          } catch {
-            // Unread indicator is a nicety -- fail silently.
-          }
-        }
       } else {
         setStudentSquad(null);
       }
@@ -207,13 +187,6 @@ export function BottomNav() {
         match: (p) => (isMentor ? p === "/rating" : p === "/squad"),
       },
       {
-        key: "note",
-        href: "/squad/notes",
-        label: "Note",
-        icon: NoteIcon,
-        match: (p) => p === "/squad/notes",
-      },
-      {
         key: "more",
         href: "#more",
         label: "More",
@@ -225,14 +198,14 @@ export function BottomNav() {
   );
 
   const activeIndex = useMemo(() => {
-    if (moreOpen) return 4;
+    if (moreOpen) return 3;
     const idx = primaryItems.findIndex((item) => item.match(pathname));
     return idx;
   }, [primaryItems, pathname, moreOpen]);
 
   // ---- Secondary destinations, shown inside the More sheet ----
   // These are the app's existing secondary routes -- not duplicates of the
-  // five primary dock items, and not invented destinations.
+  // four primary dock items, and not invented destinations.
 
   const extrasLoading = isStudent && !profileIncomplete && studentSquad === undefined;
   const badge = paymentBadge(payment);
@@ -397,8 +370,6 @@ export function BottomNav() {
             const active = idx === activeIndex;
             const Icon = item.icon;
             const isMore = item.key === "more";
-            const showNoteDot = item.key === "note" && notesUnread;
-
             if (isMore) {
               return (
                 <button
@@ -426,7 +397,6 @@ export function BottomNav() {
                 className="dock-item"
               >
                 <Icon className="h-5 w-5" />
-                {showNoteDot && <span className="dock-item-dot" aria-hidden="true" />}
                 <span className="dock-item-label">{item.label}</span>
               </Link>
             );
