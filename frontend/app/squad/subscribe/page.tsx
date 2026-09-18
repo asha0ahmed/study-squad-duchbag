@@ -17,8 +17,8 @@ import { FormError, SubmitButton } from "@/components/auth/DossierCard";
 import { TextField } from "@/components/auth/FormFields";
 
 const PLANS: { value: PaymentPlan; label: string; price: string; note: string }[] = [
-  { value: "1_month", label: "1 Month", price: "৳99", note: "Try it out" },
-  { value: "6_month", label: "6 Months", price: "৳499", note: "Best value" },
+  { value: "1_month", label: "1 Month", price: "৳149", note: "Try it out" },
+  { value: "6_month", label: "6 Months", price: "৳799", note: "Best value" },
 ];
 
 const METHODS: { value: PaymentMethod; label: string; number: string }[] = [
