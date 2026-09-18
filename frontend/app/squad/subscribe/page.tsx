@@ -16,10 +16,22 @@ import type { Payment, PaymentMethod, PaymentPlan } from "@/lib/types";
 import { FormError, SubmitButton } from "@/components/auth/DossierCard";
 import { TextField } from "@/components/auth/FormFields";
 
-const PLANS: { value: PaymentPlan; label: string; price: string; note: string }[] = [
-  { value: "1_month", label: "1 Month", price: "৳149", note: "Try it out" },
-  { value: "6_month", label: "6 Months", price: "৳799", note: "Best value" },
+const PLANS: { value: PaymentPlan; label: string; price: string; discountedPrice: string; note: string }[] = [
+  { value: "1_month", label: "1 Month", price: "৳149", discountedPrice: "৳99", note: "Try it out" },
+  { value: "6_month", label: "6 Months", price: "৳799", discountedPrice: "৳499", note: "Best value" },
 ];
+
+// Frontend-only promotional configuration. Replace the five placeholder codes as needed.
+const VALID_PROMO_CODES = [
+  "ANX20",
+  "38Kh",
+  "PLACEHOLDER1",
+  "PLACEHOLDER2",
+  "PLACEHOLDER3",
+  "PLACEHOLDER4",
+  "PLACEHOLDER5",
+];
+const PROMO_STORAGE_KEY = "study-squad-applied-promo-code";
 
 const METHODS: { value: PaymentMethod; label: string; number: string }[] = [
   { value: "nagad", label: "Nagad", number: "+8801937553593" },
@@ -46,6 +58,18 @@ export default function SubscribePage() {
   const [trxId, setTrxId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const storedPromoCode = window.localStorage.getItem(PROMO_STORAGE_KEY);
+    if (storedPromoCode && VALID_PROMO_CODES.some((code) => code.toLowerCase() === storedPromoCode.toLowerCase())) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of an external system (localStorage) on mount
+      setAppliedPromoCode(storedPromoCode);
+      setPromoCode(storedPromoCode);
+    }
+  }, []);
 
   useEffect(() => {
     const s = getSession();
@@ -92,6 +116,21 @@ export default function SubscribePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch-on-mount, setState only happens after the request resolves
     if (session?.student) load();
   }, [session, load]);
+
+  function handleApplyPromo() {
+    const normalizedCode = promoCode.trim();
+    const validCode = VALID_PROMO_CODES.find((code) => code.toLowerCase() === normalizedCode.toLowerCase());
+
+    if (!validCode) {
+      setPromoError("Invalid promo code");
+      return;
+    }
+
+    setAppliedPromoCode(validCode);
+    setPromoCode(validCode);
+    setPromoError(null);
+    window.localStorage.setItem(PROMO_STORAGE_KEY, validCode);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -214,9 +253,51 @@ export default function SubscribePage() {
                   {p.note}
                 </span>
                 <span className="mt-1 block font-display text-2xl font-bold">{p.label}</span>
-                <span className="mt-1 block text-lg">{p.price}</span>
+                <span className="mt-1 block text-lg">
+                  {appliedPromoCode ? (
+                    <>
+                      <span className="mr-2 text-base text-white/60 line-through">{p.price}</span>
+                      <span className="font-bold">{p.discountedPrice}</span>
+                    </>
+                  ) : (
+                    p.price
+                  )}
+                </span>
               </button>
             ))}
+          </div>
+
+          <div className="rounded-2xl border border-border bg-surface-2/70 p-4 sm:p-5">
+            <label htmlFor="promo_code" className="field-label">
+              Promo Code
+            </label>
+            <div className="relative mt-2">
+              <input
+                id="promo_code"
+                type="text"
+                value={promoCode}
+                onChange={(e) => {
+                  setPromoCode(e.target.value);
+                  if (promoError) setPromoError(null);
+                }}
+                placeholder="Enter promo code"
+                aria-invalid={promoError ? "true" : "false"}
+                aria-describedby={promoError ? "promo-code-error" : undefined}
+                className="input pr-24"
+              />
+              <button
+                type="button"
+                onClick={handleApplyPromo}
+                className="btn btn-primary absolute right-1 top-1 bottom-1 px-4 py-2 text-xs sm:px-5 sm:text-sm"
+              >
+                Apply
+              </button>
+            </div>
+            {promoError && (
+              <p id="promo-code-error" className="mt-2 text-sm text-coral">
+                {promoError}
+              </p>
+            )}
           </div>
 
           <div>
