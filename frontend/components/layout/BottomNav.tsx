@@ -243,6 +243,7 @@ export function BottomNav() {
           icon: "credit-card",
           badge,
         },
+        { href: "/complaints", label: "Complain", desc: "Tell the admin team what happened", icon: "inbox" },
       ];
 
   const mentorSecondary: SecondaryItem[] = [

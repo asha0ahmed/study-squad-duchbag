@@ -210,6 +210,21 @@ export interface AdminPayment extends Payment {
   student_email: string;
 }
 
+// ---- Student complaints ----
+
+export interface Complaint {
+  id: number;
+  student_id: number;
+  complaint_text: string;
+  created_at: string;
+}
+
+export interface AdminComplaint extends Complaint {
+  student_name: string;
+  student_email: string | null;
+  student_phone: string | null;
+}
+
 // ---- Better-squad suggestion ----
 
 export interface SquadSuggestion {

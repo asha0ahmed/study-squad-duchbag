@@ -714,6 +714,67 @@ app.patch('/admin/payments/:paymentId/reject', adminLimiter, async (req, res) =>
 });
 
 
+// ---- Student complaints ----
+// Complaints are submitted by the authenticated student and are visible only
+// to the admin panel through the existing shared-secret admin access pattern.
+
+app.post('/students/:id/complaints', requireAuth, async (req, res) => {
+  const studentId = parseInt(req.params.id, 10);
+
+  if (studentId !== req.student.studentId) {
+    return res.status(403).json({ error: 'You can only submit a complaint for your own account.' });
+  }
+
+  const complaintText = typeof req.body.complaint_text === 'string'
+    ? req.body.complaint_text.trim()
+    : '';
+
+  if (!complaintText) {
+    return res.status(400).json({ error: 'Complaint text is required.' });
+  }
+
+  if (complaintText.length > 5000) {
+    return res.status(400).json({ error: 'Complaint text must be 5000 characters or fewer.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO complaints (student_id, complaint_text)
+       VALUES ($1, $2)
+       RETURNING *`,
+      [studentId, complaintText]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong submitting your complaint.' });
+  }
+});
+
+app.get('/admin/complaints', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.student_id, c.complaint_text, c.created_at,
+              s.name AS student_name, s.email AS student_email, s.phone AS student_phone
+       FROM complaints c
+       JOIN students s ON s.id = c.student_id
+       ORDER BY c.created_at DESC`
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading complaints.' });
+  }
+});
+
+
 // Admin: search for a single student by email, phone, or a payment
 // transaction ID. Only one identifier is required -- the caller doesn't
 // have to say which kind it is, since a student's phone number only

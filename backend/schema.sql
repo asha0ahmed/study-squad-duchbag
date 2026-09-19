@@ -204,3 +204,14 @@ CREATE TABLE payments (
 
 CREATE INDEX idx_payments_student ON payments(student_id);
 CREATE INDEX idx_payments_status ON payments(status);
+
+-- Student complaints submitted from the More menu and reviewed by admins.
+CREATE TABLE complaints (
+  id SERIAL PRIMARY KEY,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  complaint_text TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_complaints_student ON complaints(student_id);
+CREATE INDEX idx_complaints_created_at ON complaints(created_at);

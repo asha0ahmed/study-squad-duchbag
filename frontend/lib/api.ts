@@ -12,6 +12,7 @@
 
 import type {
   AdminMentorRecord,
+  AdminComplaint,
   AdminPayment,
   AdminStudentRecord,
   ApiErrorBody,
@@ -38,6 +39,7 @@ import type {
   Task,
   TaskSubmission,
   TaskSubmissionsResponse,
+  Complaint,
 } from "./types";
 
 // In dev this is the backend's local port. Overridable via env for later
@@ -429,6 +431,22 @@ export function adminApprovePayment(secret: string, paymentId: number) {
 export function adminRejectPayment(secret: string, paymentId: number) {
   return request<Payment>(`/admin/payments/${paymentId}/reject`, {
     method: "PATCH",
+    skipAuth: true,
+    adminSecret: secret,
+  });
+}
+
+// ---- Student complaints ----
+
+export function submitComplaint(studentId: number, complaintText: string) {
+  return request<Complaint>(`/students/${studentId}/complaints`, {
+    method: "POST",
+    body: { complaint_text: complaintText },
+  });
+}
+
+export function adminListComplaints(secret: string) {
+  return request<AdminComplaint[]>("/admin/complaints", {
     skipAuth: true,
     adminSecret: secret,
   });
