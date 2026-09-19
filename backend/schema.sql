@@ -127,6 +127,11 @@ CREATE TABLE squad_messages (
   CONSTRAINT squad_messages_text_or_attachment CHECK (message IS NOT NULL OR attachment_url IS NOT NULL)
 );
 
+-- Backs chat pagination/polling: latest-page, "older than id X", and
+-- "newer than id X" queries all filter by squad_id and order by id, in
+-- either direction. See migrations/010_add_squad_messages_index.sql.
+CREATE INDEX idx_squad_messages_squad_id_id ON squad_messages (squad_id, id);
+
 -- Task 36: persist which student covers which subject in a squad
 -- (the matching algorithm already figures this out at match-time,
 -- this just saves the decision so it can be displayed later)

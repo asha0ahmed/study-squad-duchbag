@@ -29,7 +29,8 @@ import type {
   SavedStudentSubject,
   Squad,
   SquadDetailView,
-  SquadMessage,
+  SquadMessageInsertResult,
+  SquadMessagesPage,
   SquadSuggestion,
   Student,
   StudentSession,
@@ -520,7 +521,7 @@ export function sendSquadMessage(
   attachment?: SendSquadMessageAttachment,
 ) {
   if (!attachment) {
-    return request<SquadMessage>(`/squads/${squadId}/messages`, {
+    return request<SquadMessageInsertResult>(`/squads/${squadId}/messages`, {
       method: "POST",
       body: { message },
     });
@@ -532,11 +533,30 @@ export function sendSquadMessage(
     formData.append("duration", String(Math.round(attachment.durationSeconds)));
   }
   formData.append("file", attachment.file, attachment.file instanceof File ? attachment.file.name : "voice-message");
-  return requestForm<SquadMessage>(`/squads/${squadId}/messages`, formData, "POST");
+  return requestForm<SquadMessageInsertResult>(`/squads/${squadId}/messages`, formData, "POST");
 }
 
-export function getSquadMessages(squadId: number) {
-  return request<SquadMessage[]>(`/squads/${squadId}/messages`);
+export interface GetSquadMessagesOptions {
+  /** Page size for the initial load or a `before` page. Backend default is 60, max 100. */
+  limit?: number;
+  /** Cursor: only messages older than this message id (scroll-up pagination). */
+  before?: number;
+  /** Cursor: only messages newer than this message id (poll for new messages). */
+  after?: number;
+}
+
+/**
+ * Fetches one page of Squad Notes messages. Never fetches the whole
+ * history: pass no options for the initial page, `before` to page
+ * upward into older messages, or `after` to poll for new ones only.
+ */
+export function getSquadMessages(squadId: number, options: GetSquadMessagesOptions = {}) {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.before !== undefined) params.set("before", String(options.before));
+  if (options.after !== undefined) params.set("after", String(options.after));
+  const query = params.toString();
+  return request<SquadMessagesPage>(`/squads/${squadId}/messages${query ? `?${query}` : ""}`);
 }
 
 // ---- Task Management ----

@@ -1561,8 +1561,51 @@ app.post('/squads/:squadId/messages', requireAuth, messageLimiter, singleChatAtt
 });
 
 
+// Squad Notes chat history is paginated by message id rather than
+// re-sent in full on every request. `id` (not `created_at`) is used as
+// the cursor: it's the primary key, already unique and monotonically
+// increasing per insert, so "give me everything after id X" is
+// unambiguous in a way a timestamp (which can tie) is not.
+//
+// Three access patterns share one endpoint:
+//   - no cursor           -> the latest `limit` messages (initial page load)
+//   - ?before=<messageId> -> the page immediately older than that id (scroll-up pagination)
+//   - ?after=<messageId>  -> only messages newer than that id (poll for new messages)
+//
+// All three are `WHERE squad_id = $1 [AND id </> $2] ORDER BY id [ASC|DESC] LIMIT $n`,
+// which the (squad_id, id) btree index added in
+// migrations/010_add_squad_messages_index.sql serves directly in either
+// scan direction -- no sort step, no seq scan, regardless of how long a
+// squad's history gets.
+const DEFAULT_MESSAGE_PAGE_SIZE = 60;
+const MAX_MESSAGE_PAGE_SIZE = 100;
+// `after` polls are uncapped by page size (a client sets its own cadence),
+// but still bounded so a client that reconnects after a long gap (or a
+// misbehaving client) can't pull an unbounded number of rows in one call.
+const MAX_NEW_MESSAGES_PAGE_SIZE = 200;
+
+const SQUAD_MESSAGE_COLUMNS = `
+       sm.id, sm.sender_type, sm.sender_id, sm.message, sm.message_type,
+       sm.attachment_url, sm.attachment_format, sm.attachment_bytes,
+       sm.attachment_duration_seconds, sm.created_at,
+       CASE
+         WHEN sm.sender_type = 'student' THEN (SELECT name FROM students WHERE id = sm.sender_id)
+         WHEN sm.sender_type = 'mentor' THEN (SELECT name FROM mentors WHERE id = sm.sender_id)
+       END AS sender_name`;
+
 app.get('/squads/:squadId/messages', requireAuth, async (req, res) => {
   const squadId = parseInt(req.params.squadId);
+
+  const parsedLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(parsedLimit, 1), MAX_MESSAGE_PAGE_SIZE)
+    : DEFAULT_MESSAGE_PAGE_SIZE;
+
+  const parsedBefore = parseInt(req.query.before, 10);
+  const before = Number.isFinite(parsedBefore) ? parsedBefore : null;
+
+  const parsedAfter = parseInt(req.query.after, 10);
+  const after = Number.isFinite(parsedAfter) ? parsedAfter : null;
 
   try {
     const squadResult = await pool.query('SELECT * FROM squads WHERE id = $1', [squadId]);
@@ -1592,22 +1635,50 @@ app.get('/squads/:squadId/messages', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'You are not authorized to view messages in this squad.' });
     }
 
-    const messagesResult = await pool.query(
-      `SELECT
-         sm.id, sm.sender_type, sm.sender_id, sm.message, sm.message_type,
-         sm.attachment_url, sm.attachment_format, sm.attachment_bytes,
-         sm.attachment_duration_seconds, sm.created_at,
-         CASE
-           WHEN sm.sender_type = 'student' THEN (SELECT name FROM students WHERE id = sm.sender_id)
-           WHEN sm.sender_type = 'mentor' THEN (SELECT name FROM mentors WHERE id = sm.sender_id)
-         END AS sender_name
-       FROM squad_messages sm
-       WHERE sm.squad_id = $1
-       ORDER BY sm.created_at ASC`,
-      [squadId]
-    );
+    let rows;
+    let hasMore = false;
 
-    res.json(messagesResult.rows);
+    if (after !== null) {
+      // Poll for new messages only. The client already has everything up
+      // to and including `after`, so this never re-sends history.
+      const result = await pool.query(
+        `SELECT ${SQUAD_MESSAGE_COLUMNS}
+         FROM squad_messages sm
+         WHERE sm.squad_id = $1 AND sm.id > $2
+         ORDER BY sm.id ASC
+         LIMIT $3`,
+        [squadId, after, MAX_NEW_MESSAGES_PAGE_SIZE]
+      );
+      rows = result.rows;
+    } else if (before !== null) {
+      // Scroll-up pagination: the page of messages immediately older than
+      // `before`. Fetching `limit + 1` and trimming the extra row tells us
+      // whether more history remains without a separate COUNT query.
+      const result = await pool.query(
+        `SELECT ${SQUAD_MESSAGE_COLUMNS}
+         FROM squad_messages sm
+         WHERE sm.squad_id = $1 AND sm.id < $2
+         ORDER BY sm.id DESC
+         LIMIT $3`,
+        [squadId, before, limit + 1]
+      );
+      hasMore = result.rows.length > limit;
+      rows = result.rows.slice(0, limit).reverse();
+    } else {
+      // Initial load: just the latest page, not the whole history.
+      const result = await pool.query(
+        `SELECT ${SQUAD_MESSAGE_COLUMNS}
+         FROM squad_messages sm
+         WHERE sm.squad_id = $1
+         ORDER BY sm.id DESC
+         LIMIT $2`,
+        [squadId, limit + 1]
+      );
+      hasMore = result.rows.length > limit;
+      rows = result.rows.slice(0, limit).reverse();
+    }
+
+    res.json({ messages: rows, hasMore });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong fetching messages.' });

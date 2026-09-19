@@ -1,5 +1,69 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 4 — Squad Notes chat: cursor pagination + index (7–8 req/s target)
+
+### Problem
+
+Squad Notes (chat) had two scalability issues:
+
+1. **Full-history refetch on every request.** `GET /squads/:squadId/messages`
+   returned every message in the squad, every time, with no `LIMIT`. The
+   frontend polled this endpoint every 7s and also called it after every
+   single send. A squad's chat load time and payload size grew without
+   bound as its history grew.
+2. **No supporting index.** The query filtered by `squad_id` and sorted by
+   `created_at` with nothing but the table's primary key to help — a
+   sequential scan + sort on every call.
+
+### Changes made (chat system only)
+
+- **`backend/db.js`** — made the `pg.Pool` size/timeouts explicit and
+  env-configurable (`DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`,
+  `DB_POOL_CONN_TIMEOUT_MS`), default behavior unchanged (`max=10`).
+- **`backend/server.js`** — rewrote only `GET /squads/:squadId/messages`
+  to page by message id instead of returning full history:
+  - no cursor → latest page (initial load, default 60, capped at 100)
+  - `?before=<id>` → older page (scroll-up pagination)
+  - `?after=<id>` → only messages newer than that id (polling)
+  - Response shape is now `{ messages, hasMore }`. Auth, squad-membership
+    checks, and the `POST` send route are untouched.
+- **`backend/migrations/010_add_squad_messages_index.sql`** (new) +
+  **`schema.sql`** — added `idx_squad_messages_squad_id_id` on
+  `squad_messages (squad_id, id)`. A single composite btree index serves
+  all three access patterns above in either scan direction.
+- **`frontend/lib/api.ts` / `lib/types.ts`** — `getSquadMessages` now takes
+  `{ limit, before, after }` and returns `SquadMessagesPage`;
+  `sendSquadMessage`'s return type corrected to
+  `SquadMessageInsertResult` (it never actually included `sender_name`;
+  the frontend previously just ignored the response and refetched).
+- **`frontend/app/squad/notes/page.tsx`** — rewritten to: load the latest
+  60 messages on open; load older messages in batches of 40 on scroll-up,
+  preserving exact scroll position; poll only `?after=<lastId>` every 7s
+  instead of refetching everything; append a sent message locally instead
+  of refetching after every send; memoize each message row (`React.memo`)
+  so appending/prepending doesn't re-render existing bubbles. Text,
+  image, and voice sending, and Cloudinary attachment handling, are
+  unchanged.
+
+### Verified
+
+- `EXPLAIN ANALYZE` on all three query shapes (no cursor / `before` /
+  `after`) against a 6,000-row squad: `Index Only Scan` in both scan
+  directions, sub-millisecond execution — vs. the old query's `Seq Scan`
+  + `Sort` at the same size.
+- Mixed-workload load test (poll/older/initial/send, weighted realistically)
+  across 15 seeded squads (75 concurrent simulated users) with 60,000+
+  seeded messages: **90s sustained at ~7.4 req/s → 0% errors, p95 3–8ms,
+  p99 6–12ms** across every request type. A follow-up stress run pushed
+  to ~60 req/s (8x the target) with still 0% errors, confirming headroom
+  above the target on the same free-tier-equivalent single Postgres
+  instance.
+- `tsc --noEmit`, `eslint`, and `next build` all pass clean.
+- Re-verified against the original codebase: `git diff` on `server.js`
+  touches only the `GET` messages route; `POST` route, rate limiters,
+  auth middleware, matching, payments, and every other endpoint are
+  byte-for-byte unchanged.
+
 ## Session 3 — Background feature, mentor photo, and a full re-audit
 
 ### Audit (before any code was touched)

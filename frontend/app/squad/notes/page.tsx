@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ApiError,
   getMySquad,
@@ -22,6 +22,21 @@ import { UiIcon } from "@/components/layout/DockIcons";
 const POLL_INTERVAL_MS = 7000;
 const MAX_RECORDING_SECONDS = 120;
 
+// How many messages to request on the initial load and on each
+// scroll-up ("load older") page. Kept well under the backend's hard cap
+// (100) so a single request stays fast even on a cold connection.
+const INITIAL_PAGE_SIZE = 60;
+const OLDER_PAGE_SIZE = 40;
+
+// Trigger "load older messages" once the user has scrolled within this
+// many pixels of the top of the chat pane.
+const LOAD_OLDER_THRESHOLD_PX = 60;
+
+// Only auto-scroll to a newly arrived message if the user was already
+// within this many pixels of the bottom -- otherwise someone reading
+// older history would get yanked back down every poll cycle.
+const NEAR_BOTTOM_THRESHOLD_PX = 120;
+
 function formatDuration(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -40,9 +55,69 @@ type Access =
   | { state: "ready"; squadId: number }
   | { state: "error"; message: string };
 
+/** What the scroll container should do right after the next commit. */
+type ScrollAction =
+  | { type: "none" }
+  | { type: "bottom" }
+  | { type: "preserve"; previousScrollHeight: number; previousScrollTop: number };
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
+
+/**
+ * One chat bubble. Memoized so that appending new messages (poll) or
+ * prepending older ones (scroll-up) doesn't re-render every bubble
+ * already on screen -- only the ones that are actually new re-render,
+ * since `message` and `mine` keep the same reference/value for anything
+ * that hasn't changed.
+ */
+const MessageRow = memo(function MessageRow({
+  message,
+  mine,
+}: {
+  message: SquadMessage;
+  mine: boolean;
+}) {
+  return (
+    <div className="flex items-start gap-3 py-3">
+      <Avatar name={message.sender_name} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="text-xs font-bold uppercase tracking-[0.04em] text-text">
+            {message.sender_name}
+            {mine && <span className="ml-1 font-normal text-text-faint">(you)</span>}
+            {message.sender_type === "mentor" && (
+              <span className="ml-1 font-semibold normal-case text-emerald">· Mentor</span>
+            )}
+          </span>
+          <span className="text-xs text-text-faint">{formatTime(message.created_at)}</span>
+        </div>
+        {message.message_type === "image" && message.attachment_url && (
+          <a href={message.attachment_url} target="_blank" rel="noreferrer" className="mt-1 block w-fit">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={message.attachment_url}
+              alt="Shared image"
+              className="max-h-56 max-w-full rounded-lg border border-border-soft object-cover"
+            />
+          </a>
+        )}
+        {message.message_type === "voice" && message.attachment_url && (
+          <div className="mt-1 flex items-center gap-2">
+            <audio controls src={message.attachment_url} className="h-9 max-w-[240px]" />
+            {message.attachment_duration_seconds ? (
+              <span className="text-xs text-text-faint">
+                {formatDuration(message.attachment_duration_seconds)}
+              </span>
+            ) : null}
+          </div>
+        )}
+        {message.message && <p className="mt-0.5 break-words text-[15px] text-text">{message.message}</p>}
+      </div>
+    </div>
+  );
+});
 
 function SquadNotesContent() {
   const router = useRouter();
@@ -53,6 +128,8 @@ function SquadNotesContent() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [access, setAccess] = useState<Access>({ state: "loading" });
   const [messages, setMessages] = useState<SquadMessage[]>([]);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +142,46 @@ function SquadNotesContent() {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingStartRef = useRef(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Mirrors of state that async callbacks (poll interval, scroll handler)
+  // need to read without becoming stale closures or forcing the effect
+  // that owns the poll interval to restart on every message.
+  const messagesRef = useRef<SquadMessage[]>([]);
+  const hasMoreOlderRef = useRef(false);
+  const loadingOlderRef = useRef(false);
+  const pollInFlightRef = useRef(false);
+  const isNearBottomRef = useRef(true);
+  const pendingScrollActionRef = useRef<ScrollAction>({ type: "none" });
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    hasMoreOlderRef.current = hasMoreOlder;
+  }, [hasMoreOlder]);
+
+  useEffect(() => {
+    loadingOlderRef.current = loadingOlder;
+  }, [loadingOlder]);
+
+  // Applies whatever the last state update queued up in
+  // pendingScrollActionRef -- either "jump to bottom" (initial load, a
+  // new message arriving while already at the bottom, or sending your
+  // own message) or "preserve exact position" (older messages were just
+  // prepended above what's on screen). Runs before paint so there's no
+  // visible flicker/jump.
+  useLayoutEffect(() => {
+    const action = pendingScrollActionRef.current;
+    const el = scrollRef.current;
+    pendingScrollActionRef.current = { type: "none" };
+    if (!el || action.type === "none") return;
+    if (action.type === "bottom") {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollTop = el.scrollHeight - action.previousScrollHeight + action.previousScrollTop;
+    }
+  }, [messages]);
 
   useEffect(() => {
     const s = getSession();
@@ -122,34 +239,137 @@ function SquadNotesContent() {
     if (session) resolveAccess();
   }, [session, resolveAccess]);
 
-  const loadMessages = useCallback(async (squadId: number) => {
+  // ---- Initial load: latest page only, never the full history ----
+  const loadInitialMessages = useCallback(async (squadId: number) => {
     try {
-      const result = await getSquadMessages(squadId);
-      setMessages(result);
-      // Opening/polling this page while it's the active view is "seeing"
-      // it -- clears the mobile drawer's unread dot for this squad.
-      const latest = result[result.length - 1];
+      const page = await getSquadMessages(squadId, { limit: INITIAL_PAGE_SIZE });
+      pendingScrollActionRef.current = { type: "bottom" };
+      setMessages(page.messages);
+      setHasMoreOlder(page.hasMore);
+      const latest = page.messages[page.messages.length - 1];
+      // Opening this page while it's the active view is "seeing" it --
+      // clears the mobile drawer's unread dot for this squad.
       if (latest) markNotesSeen(squadId, latest.created_at);
     } catch {
-      // Silent on poll failures -- don't interrupt an otherwise-working chat
-      // over one flaky request; the next poll will retry.
+      // Silent -- consistent with this screen's existing soft-fail
+      // network handling; reopening the page retries.
+    }
+  }, []);
+
+  // ---- Scroll-up pagination: fetch one older page, preserve position ----
+  const loadOlderMessages = useCallback(async () => {
+    if (access.state !== "ready") return;
+    const oldest = messagesRef.current[0];
+    if (!oldest || !hasMoreOlderRef.current || loadingOlderRef.current) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const container = scrollRef.current;
+    const previousScrollHeight = container?.scrollHeight ?? 0;
+    const previousScrollTop = container?.scrollTop ?? 0;
+
+    try {
+      const page = await getSquadMessages(access.squadId, {
+        before: oldest.id,
+        limit: OLDER_PAGE_SIZE,
+      });
+      if (page.messages.length > 0) {
+        pendingScrollActionRef.current = {
+          type: "preserve",
+          previousScrollHeight,
+          previousScrollTop,
+        };
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const olderUnique = page.messages.filter((m) => !existingIds.has(m.id));
+          return [...olderUnique, ...prev];
+        });
+      }
+      setHasMoreOlder(page.hasMore);
+    } catch {
+      // Silent -- a failed "load older" attempt just means scrolling up
+      // again retries it; it shouldn't interrupt the live chat.
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+    // access is intentionally the only dependency: the rest is read from
+    // refs so this callback identity (and therefore the scroll handler
+    // that closes over it) stays stable across message updates.
+  }, [access]);
+
+  // ---- Polling: fetch only messages newer than the last one we have ----
+  const pollNewMessages = useCallback(async (squadId: number) => {
+    if (pollInFlightRef.current) return;
+    const current = messagesRef.current;
+    const latest = current[current.length - 1];
+    if (!latest) return;
+
+    pollInFlightRef.current = true;
+    try {
+      const page = await getSquadMessages(squadId, { after: latest.id });
+      if (page.messages.length === 0) return;
+
+      // Dedup against `prev` (the array as it actually is when this
+      // updater runs), not the `current` snapshot taken before the
+      // await -- if the user sent a message of their own while this
+      // poll was in flight, `prev` already includes it and this avoids
+      // appending it a second time.
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const fresh = page.messages.filter((m) => !existingIds.has(m.id));
+        if (fresh.length === 0) return prev;
+        if (isNearBottomRef.current) {
+          pendingScrollActionRef.current = { type: "bottom" };
+        }
+        return [...prev, ...fresh];
+      });
+
+      // The "seen" marker only needs the newest id/timestamp the server
+      // told us about, which `page.messages` already gives us directly --
+      // no need to know exactly which of them ended up newly appended.
+      const newest = page.messages[page.messages.length - 1];
+      markNotesSeen(squadId, newest.created_at);
+    } catch {
+      // Silent on poll failures -- don't interrupt an otherwise-working
+      // chat over one flaky request; the next poll will retry.
+    } finally {
+      pollInFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     if (access.state !== "ready") return;
-    // loadMessages is async and only calls setState after the network
-    // request resolves -- this starts the poll loop, not a synchronous
-    // render-time state write.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadMessages(access.squadId);
-    const interval = setInterval(() => loadMessages(access.squadId), POLL_INTERVAL_MS);
+    loadInitialMessages(access.squadId);
+    const interval = setInterval(() => pollNewMessages(access.squadId), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [access, loadMessages]);
+  }, [access, loadInitialMessages, pollNewMessages]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD_PX;
+
+    if (el.scrollTop < LOAD_OLDER_THRESHOLD_PX && hasMoreOlder && !loadingOlder) {
+      loadOlderMessages();
+    }
+  }
+
+  /** Appends a message this user just sent, without refetching anything. */
+  function appendOwnMessage(squadId: number, row: SquadMessage) {
+    pendingScrollActionRef.current = { type: "bottom" };
+    isNearBottomRef.current = true;
+    setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+    markNotesSeen(squadId, row.created_at);
+  }
+
+  function myDisplayName() {
+    if (!session) return "You";
+    return (session.role === "student" ? session.student?.name : session.mentor?.name) ?? "You";
+  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -157,9 +377,9 @@ function SquadNotesContent() {
     setError(null);
     setSending(true);
     try {
-      await sendSquadMessage(access.squadId, draft.trim());
+      const created = await sendSquadMessage(access.squadId, draft.trim());
+      appendOwnMessage(access.squadId, { ...created, sender_name: myDisplayName() });
       setDraft("");
-      await loadMessages(access.squadId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't send that message.");
     } finally {
@@ -174,8 +394,8 @@ function SquadNotesContent() {
     setError(null);
     setSending(true);
     try {
-      await sendSquadMessage(access.squadId, undefined, { file });
-      await loadMessages(access.squadId);
+      const created = await sendSquadMessage(access.squadId, undefined, { file });
+      appendOwnMessage(access.squadId, { ...created, sender_name: myDisplayName() });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't send that image.");
     } finally {
@@ -243,8 +463,8 @@ function SquadNotesContent() {
     setError(null);
     setSending(true);
     try {
-      await sendSquadMessage(access.squadId, undefined, { file: blob, durationSeconds });
-      await loadMessages(access.squadId);
+      const created = await sendSquadMessage(access.squadId, undefined, { file: blob, durationSeconds });
+      appendOwnMessage(access.squadId, { ...created, sender_name: myDisplayName() });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't send that voice message.");
     } finally {
@@ -304,6 +524,7 @@ function SquadNotesContent() {
 
         <div
           ref={scrollRef}
+          onScroll={handleScroll}
           className="card mt-6 flex-1 overflow-y-auto px-5 py-4"
           style={{ maxHeight: "55vh", minHeight: "40vh" }}
         >
@@ -314,47 +535,17 @@ function SquadNotesContent() {
             </div>
           ) : (
             <div className="divide-y divide-border-soft">
+              {loadingOlder && (
+                <p className="py-2 text-center text-xs text-text-faint">Loading older notes…</p>
+              )}
+              {!hasMoreOlder && (
+                <p className="py-2 text-center text-xs text-text-faint">
+                  You&apos;ve reached the start of this squad&apos;s notes.
+                </p>
+              )}
               {messages.map((m) => {
                 const mine = m.sender_type === session.role && m.sender_id === currentSenderId;
-                return (
-                  <div key={m.id} className="flex items-start gap-3 py-3">
-                    <Avatar name={m.sender_name} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <span className="text-xs font-bold uppercase tracking-[0.04em] text-text">
-                          {m.sender_name}
-                          {mine && <span className="ml-1 font-normal text-text-faint">(you)</span>}
-                          {m.sender_type === "mentor" && (
-                            <span className="ml-1 font-semibold normal-case text-emerald">· Mentor</span>
-                          )}
-                        </span>
-                        <span className="text-xs text-text-faint">{formatTime(m.created_at)}</span>
-                      </div>
-                      {m.message_type === "image" && m.attachment_url && (
-                        <a href={m.attachment_url} target="_blank" rel="noreferrer" className="mt-1 block w-fit">
-                          <img
-                            src={m.attachment_url}
-                            alt="Shared image"
-                            className="max-h-56 max-w-full rounded-lg border border-border-soft object-cover"
-                          />
-                        </a>
-                      )}
-                      {m.message_type === "voice" && m.attachment_url && (
-                        <div className="mt-1 flex items-center gap-2">
-                          <audio controls src={m.attachment_url} className="h-9 max-w-[240px]" />
-                          {m.attachment_duration_seconds ? (
-                            <span className="text-xs text-text-faint">
-                              {formatDuration(m.attachment_duration_seconds)}
-                            </span>
-                          ) : null}
-                        </div>
-                      )}
-                      {m.message && (
-                        <p className="mt-0.5 break-words text-[15px] text-text">{m.message}</p>
-                      )}
-                    </div>
-                  </div>
-                );
+                return <MessageRow key={m.id} message={m} mine={mine} />;
               })}
             </div>
           )}

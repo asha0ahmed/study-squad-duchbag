@@ -253,6 +253,26 @@ export interface SquadMessage {
   sender_name: string;
 }
 
+/**
+ * A row exactly as POST /squads/:squadId/messages returns it (`RETURNING *`
+ * on the insert) -- everything SquadMessage has except `sender_name`,
+ * which only the GET route computes via a join. The sender is always the
+ * caller, so the frontend fills `sender_name` in locally from the current
+ * session instead of refetching.
+ */
+export type SquadMessageInsertResult = Omit<SquadMessage, "sender_name">;
+
+/**
+ * Response shape for GET /squads/:squadId/messages. `hasMore` means
+ * "older messages exist beyond this page" -- set on the initial load and
+ * on `before`-cursor pages, meaningless (always false) on `after`-cursor
+ * (poll) responses since there's no "older" direction to ask about there.
+ */
+export interface SquadMessagesPage {
+  messages: SquadMessage[];
+  hasMore: boolean;
+}
+
 // ---- Admin: Student & Mentor records ----
 
 /** Minimal squad context attached to an admin student-search result. */
