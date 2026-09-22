@@ -293,6 +293,13 @@ app.post('/students', registrationLimiter, async (req, res) => {
       }
       return res.status(409).json({ error: 'A student with this email already exists.' });
     }
+    if (err.code === '22001') {
+      // string_data_right_truncation: a value was longer than its column
+      // allows (e.g. a dropdown option added to the frontend without
+      // widening the matching column -- see migrations/011_widen_year_aspirant_type.sql).
+      console.error('Column too narrow for submitted value:', err);
+      return res.status(400).json({ error: 'One of the submitted fields is too long. Please contact support if this persists.' });
+    }
     console.error(err);
     res.status(500).json({ error: 'Something went wrong saving the student.' });
   }

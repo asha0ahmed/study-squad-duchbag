@@ -7,9 +7,9 @@ CREATE TABLE students (
   password_hash VARCHAR(255),
   role VARCHAR(20) NOT NULL DEFAULT 'student',
   institution VARCHAR(150),
-  year VARCHAR(20),
+  year VARCHAR(50),
   academic_group VARCHAR(50),
-  aspirant_type VARCHAR(50),
+  aspirant_type VARCHAR(60),
   matching_status VARCHAR(20) DEFAULT 'not_started',
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -86,8 +86,8 @@ CREATE TABLE mentor_groups (
 CREATE TABLE squads (
   id SERIAL PRIMARY KEY,
   academic_group VARCHAR(20) NOT NULL,
-  year VARCHAR(30) NOT NULL,
-  aspirant_type VARCHAR(30) NOT NULL,
+  year VARCHAR(50) NOT NULL,
+  aspirant_type VARCHAR(60) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'suggested',
   invite_code VARCHAR(20) UNIQUE,
   mentor_id INTEGER REFERENCES mentors(id),
