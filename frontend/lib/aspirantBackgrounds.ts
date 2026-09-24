@@ -17,9 +17,9 @@
  * filenames below. No code changes are needed when that happens.
  */
 export const ASPIRANT_TYPE_BACKGROUNDS: Record<string, string> = {
-  "Engineering Admission": "/images/gates/science-buet.webp",
-  "Medical Admission": "/images/gates/medical-dmc.webp",
-  "University Admission (General)": "/images/gates/university-du.webp",
+  "Engineering Admission": "/images/gates/aspirant type buet.webp",
+  "Medical Admission": "/images/gates/aspirant type dmc.webp",
+  "University Admission (General)": "/images/gates/aspirant type DU.webp",
   "HSC Board Exam": "/images/gates/board-exam.webp",
 };
 
