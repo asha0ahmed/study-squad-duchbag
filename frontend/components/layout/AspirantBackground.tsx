@@ -41,7 +41,7 @@ export function AspirantBackground() {
         // whitespace -- the browser treats the whole declaration as invalid
         // and silently drops it, which is why only "HSC Board Exam" (the one
         // filename without a space) ever showed before this fix.
-        backgroundImage: `linear-gradient(rgba(11, 16, 32, 0.25), rgba(11, 16, 32, 0.25)), url("${backgroundImage}")`,
+        backgroundImage: `linear-gradient(rgba(11, 16, 32, 0.82), rgba(11, 16, 32, 0.82)), url("${backgroundImage}")`,
       }}
     />
   );

@@ -30,6 +30,12 @@
   --cyan-rgb: 34, 211, 238;
   --emerald-rgb: 52, 211, 153;
   --coral-rgb: 251, 113, 133;
+
+  /* Glassmorphism (frosted card) tuning -- change these three to restyle
+     every .card / .card-flat in the app at once. See ".card" below. */
+  --glass-blur: 20px;         /* how frosted -- 0 = no blur, higher = foggier */
+  --glass-opacity: 0.55;      /* 0 = fully see-through, 1 = fully solid */
+  --glass-border-opacity: 0.12; /* brightness of the hairline edge highlight */
 }
 
 @theme inline {
@@ -213,17 +219,30 @@ body {
 /* ---------------------------------------------------------------- */
 /* Surfaces                                                           */
 /* ---------------------------------------------------------------- */
+/* Frosted glass: a translucent tinted surface + backdrop-filter blur so
+   whatever sits behind the card (the ambient mesh gradient, the aspirant
+   background photo, other page content) shows through, softened. Tune the
+   look via --glass-blur / --glass-opacity / --glass-border-opacity in the
+   :root block above rather than editing the numbers here. */
 .card {
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-2) 100%);
-  border: 1px solid var(--color-border);
+  background: linear-gradient(
+    180deg,
+    rgba(17, 24, 39, var(--glass-opacity)) 0%,
+    rgba(21, 29, 49, var(--glass-opacity)) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 20px 40px -24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 20px 40px -24px rgba(0, 0, 0, 0.6);
 }
 
 .card-flat {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: rgba(17, 24, 39, var(--glass-opacity));
+  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
   border-radius: var(--radius-md);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(150%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(150%);
 }
 
 .card-hover {
