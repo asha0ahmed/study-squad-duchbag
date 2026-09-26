@@ -183,7 +183,7 @@ export default function FindMySquadPage() {
 
         <div className="card mt-8 px-5 py-5">
           <p className="text-sm text-text-dim">
-            Your squad starts chatting the moment it reaches 4 members — more scholars are being
+            Your squad starts chatting the moment it reaches 4 members — more Students are being
             matched in automatically.
           </p>
           <Link href="/squad" className="mt-3 inline-block text-sm font-semibold text-cyan underline">

@@ -102,7 +102,7 @@ function StudentSignupForm() {
 
   return (
     <main className="relative flex flex-1 items-center justify-center px-6 py-16">
-      <DossierCard eyebrow="Scholar admission form" title="Open your dossier">
+      <DossierCard eyebrow="Student admission form" title="Open your dossier">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <TextField
             label="Full Name"

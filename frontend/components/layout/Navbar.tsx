@@ -19,7 +19,7 @@ import { getSession, StoredSession } from "@/lib/api";
  * a student/mentor session -- see getAdminSecret in lib/api.ts) and its
  * own dedicated chrome (see app/admin/layout.tsx + AdminNavbar). Without
  * this check, an authenticated admin would fall through the `!session`
- * branch below and see the public "Sign in / Get started" scholar CTAs,
+ * branch below and see the public "Sign in / Get started" Student CTAs,
  * which is exactly the "admin navbar behaves like the student navbar"
  * bug -- so this bar renders nothing at all on /admin routes.
  */

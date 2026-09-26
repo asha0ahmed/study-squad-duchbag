@@ -173,7 +173,7 @@ export function StudentDesk({ student }: { student: StudentSession }) {
             {!isLocked && (
               <p className="mt-5 text-sm text-text-dim">
                 Squad Notes unlocks once you reach {MEMBERS_NEEDED_TO_ACTIVATE} members —
-                more scholars are being matched in automatically.
+                more Students are being matched in automatically.
               </p>
             )}
           </div>

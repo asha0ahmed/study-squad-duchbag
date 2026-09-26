@@ -70,7 +70,7 @@ export default function InviteJoinPage() {
         <div className="card w-full max-w-md px-6 py-10 text-center">
           <p className="eyebrow text-cyan">You&apos;ve been invited</p>
           <h1 className="mt-2 font-display text-3xl font-extrabold text-text">Join a Study Squad</h1>
-          <p className="mt-3 text-sm text-text-dim">Sign up or sign in as a Scholar to accept this invite.</p>
+          <p className="mt-3 text-sm text-text-dim">Sign up or sign in as a Student to accept this invite.</p>
           <div className="mt-6 flex flex-col gap-3">
             <Link href={`/auth/student/signup?inviteCode=${code}`} className="btn btn-primary">
               Sign Up

@@ -286,7 +286,7 @@ export function BottomNav() {
                 <span className="avatar h-10 w-10 text-sm">{initials(name)}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-sm font-semibold text-text">{name}</p>
-                  <p className="text-xs text-text-dim">{isStudent ? "Scholar" : "Mentor"}</p>
+                  <p className="text-xs text-text-dim">{isStudent ? "Student" : "Mentor"}</p>
                 </div>
                 <button onClick={handleLogout} className="btn btn-ghost !px-3 !py-1.5 text-xs shrink-0">
                   Sign out

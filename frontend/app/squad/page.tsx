@@ -158,7 +158,7 @@ export default function SquadPage() {
               />
             </div>
             <p className="mt-3 text-sm text-text-faint">
-              More scholars are being matched in automatically. You&apos;ll be notified the moment
+              More Students are being matched in automatically. You&apos;ll be notified the moment
               your squad is ready.
             </p>
           </div>

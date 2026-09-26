@@ -32,7 +32,7 @@ function StudentLoginForm() {
 
   return (
     <main className="relative flex flex-1 items-center justify-center px-6 py-16">
-      <DossierCard eyebrow="Scholar sign-in" title="Welcome back">
+      <DossierCard eyebrow="Student sign-in" title="Welcome back">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <TextField
             label="Email or Phone Number"
@@ -67,7 +67,7 @@ function StudentLoginForm() {
         </p>
         <p className="mt-2 text-center text-sm text-text-faint">
           <Link href="/auth" className="underline">
-            Not a Scholar? Switch entry
+            Not a Student? Switch entry
           </Link>
         </p>
       </DossierCard>

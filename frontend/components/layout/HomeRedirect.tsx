@@ -6,7 +6,7 @@ import { getAdminSecret, getSession } from "@/lib/api";
 
 /**
  * The public landing page ("/") is written for a logged-out visitor --
- * its only calls to action are "I'm a Scholar" / "I'm a Mentor", which
+ * its only calls to action are "I'm a Student" / "I'm a Mentor", which
  * both link to login pages. If an already-authenticated student, mentor,
  * or admin ever lands here (e.g. by tapping "Home" in the dock, or a
  * stale bookmark), those buttons would send them straight back to a

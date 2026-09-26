@@ -228,13 +228,13 @@ a database with existing mentors, students, squads, and payments.
    shared secret (`sessionStorage`), completely separate from the
    student/mentor `session` (`localStorage`) that the global `Navbar` and
    `BottomNav` read. An authenticated admin therefore looked "logged out"
-   to those components and saw the public "Sign in / Get started" scholar
+   to those components and saw the public "Sign in / Get started" Student
    buttons. Fix: `Navbar` and `BottomNav` now render nothing at all on
    `/admin/*` routes; the Admin Panel gets its own dedicated
    `AdminNavbar` + `app/admin/layout.tsx` guard instead.
 2. **Admin/Mentor "Home" tab sending logged-in users back to login.** The
    dock's Home item was hardcoded to `/`, the public landing page, whose
-   only CTAs are "I'm a Scholar" / "I'm a Mentor" — both login links. Any
+   only CTAs are "I'm a Student" / "I'm a Mentor" — both login links. Any
    authenticated user tapping them landed on a login screen. Fix: added
    `HomeRedirect`, which immediately routes an already-authenticated
    visitor away from `/` to their real dashboard (`/desk` for

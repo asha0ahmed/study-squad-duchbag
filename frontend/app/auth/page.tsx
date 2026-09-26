@@ -17,7 +17,7 @@ export default function AuthEntryPage() {
           >
             <span className="badge badge-indigo">Aspirant</span>
             <span className="mt-3 block font-display text-2xl font-bold text-text">
-              I&apos;m a Scholar
+              I&apos;m a Student
             </span>
             <span className="mt-1.5 block text-sm text-text-dim">
               Find your squad and study together.

@@ -25,13 +25,13 @@ const GROUP_META: Record<
   },
   Arts: {
     icon: "books",
-    blurb: "History, Economics, Civics and more — matched with scholars who balance out your strengths.",
+    blurb: "History, Economics, Civics and more — matched with Students who balance out your strengths.",
     accent: "from-violet to-coral",
     gateImage: "/images/gates/arts-jahangirnagar.webp",
   },
   Commerce: {
     icon: "trend",
-    blurb: "Accounting, Finance, Marketing and more — pick 6 subjects and match with scholars who balance out your strengths.",
+    blurb: "Accounting, Finance, Marketing and more — pick 6 subjects and match with Students who balance out your strengths.",
     accent: "from-emerald to-cyan",
     gateImage: "/images/gates/arts-jahangirnagar.webp",
   },
@@ -76,7 +76,7 @@ export default function Home() {
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row lg:mt-10 lg:max-w-[30rem] lg:gap-4">
               <Link href="/auth/student/login" className="btn btn-primary min-h-[52px] px-7 text-base lg:min-h-[58px] lg:px-8 lg:text-[1rem]">
-                I&apos;m a Scholar
+                I&apos;m a Student
               </Link>
             </div>
             <div className="mt-10 flex items-center gap-4 lg:mt-12 lg:gap-6">
@@ -151,7 +151,7 @@ export default function Home() {
           before they ever sign up. */}
       <section className="mx-auto max-w-7xl pb-20 pl-6 lg:pl-8 lg:pb-24">
         <div className="pr-6 lg:pr-8">
-          <p className="eyebrow text-violet lg:text-xs">Where scholars are matched</p>
+          <p className="eyebrow text-violet lg:text-xs">Where Students are matched</p>
           <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-text sm:text-3xl lg:text-[2.15rem]">
             Active groups on Study Squad
           </h2>
