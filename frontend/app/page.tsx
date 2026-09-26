@@ -41,7 +41,7 @@ export default function Home() {
   return (
     <main className="flex-1">
       <HomeRedirect />
-      <section className="relative mx-auto max-w-7xl overflow-hidden px-4 pb-24 pt-5 sm:pt-24 lg:px-8 lg:pb-28 lg:pt-20">
+      <section className="relative mx-auto max-w-7xl overflow-hidden px-4 pb-24 pt-5 sm:pt-24 lg:px-8 lg:pb-28 lg:pt-5">
         <div className="glow-orb h-[28rem] w-[28rem] bg-indigo/25" style={{ top: "-6rem", left: "-8rem" }} />
         <div className="glow-orb h-96 w-96 bg-cyan/15" style={{ top: "2rem", right: "-6rem" }} />
 
@@ -61,7 +61,7 @@ export default function Home() {
 
         <div className="relative z-10 grid items-center gap-16 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10 xl:gap-16">
           <div className="animate-fade-in-up lg:pr-4">
-            <span className="badge badge-indigo inline-flex items-center gap-1.5 lg:mb-2 lg:px-4 lg:py-2 lg:text-sm"><UiIcon name="sparkle" className="h-3.5 w-3.5" />Peer-matched squads, not random chats</span>
+            <span className="badge badge-indigo inline-flex items-center gap-1.5 lg:mb-1 lg:px-4 lg:py-2 lg:text-sm"><UiIcon name="sparkle" className="h-3.5 w-3.5" />Peer-matched squads, not random chats</span>
             <h1 className="mt-1 font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-text sm:text-6xl lg:mt-3 lg:text-[4.3rem] lg:leading-[0.92] xl:text-[5rem]">
               Your squad is <span className="text-gradient-brand">waiting</span> for you.
             </h1>
@@ -174,7 +174,7 @@ export default function Home() {
                 {meta.gateImage && (
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute -right-6 -top-4 h-40 w-40 opacity-[0.16] mix-blend-screen"
+                    className="pointer-events-none absolute -right-6 -top-4 h-40 w-40 opacity-[0.95] mix-blend-screen lg:opacity-[0.80]"
                     style={{
                       backgroundImage: `url(${meta.gateImage})`,
                       backgroundSize: "cover",
