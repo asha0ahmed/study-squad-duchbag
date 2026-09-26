@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { ApiError, loginStudent } from "@/lib/api";
 import { DossierCard, FormError, SubmitButton } from "@/components/auth/DossierCard";
 import { TextField } from "@/components/auth/FormFields";
+import { LandingBackground } from "@/components/layout/LandingBackground";
 
 function StudentLoginForm() {
   const router = useRouter();
@@ -31,7 +32,8 @@ function StudentLoginForm() {
   }
 
   return (
-    <main className="relative flex flex-1 items-center justify-center px-6 py-16">
+    <main className="relative z-10 flex flex-1 items-center justify-center px-6 py-16">
+      <LandingBackground />
       <DossierCard eyebrow="Student sign-in" title="Welcome back">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <TextField

@@ -174,7 +174,7 @@ export default function Home() {
                 {meta.gateImage && (
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute -right-6 -top-4 h-40 w-40 opacity-[0.95] mix-blend-screen lg:opacity-[0.80]"
+                    className="pointer-events-none absolute -right-6 -top-4 h-40 w-40 opacity-[0.75] mix-blend-screen lg:opacity-[0.80]"
                     style={{
                       backgroundImage: `url(${meta.gateImage})`,
                       backgroundSize: "cover",
