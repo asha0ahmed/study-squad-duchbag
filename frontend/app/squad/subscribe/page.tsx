@@ -46,6 +46,60 @@ type Screen =
   | { state: "rejected"; payment: Payment }
   | { state: "approved"; payment: Payment };
 
+const ASSIGNMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Counts down from the moment the payment was submitted (created_at) --
+// not from admin approval -- so it starts right after the student pays.
+// Clamped at zero -- it never goes negative or wraps.
+function getAssignmentCountdown(payment: Payment, now: number) {
+  const submittedAt = new Date(payment.created_at).getTime();
+  const remainingMs = Math.max(0, submittedAt + ASSIGNMENT_WINDOW_MS - now);
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  return {
+    hours: Math.floor(totalSeconds / 3600),
+    minutes: Math.floor((totalSeconds % 3600) / 60),
+    seconds: totalSeconds % 60,
+    expired: remainingMs === 0,
+  };
+}
+
+function two(n: number) {
+  return n.toString().padStart(2, "0");
+}
+
+function AssignmentCountdown({ payment, now }: { payment: Payment; now: number }) {
+  const countdown = getAssignmentCountdown(payment, now);
+  return (
+    <div className="mt-6 rounded-2xl border border-border bg-surface-2/70 px-5 py-6">
+      <p className="text-sm font-semibold text-text-dim">
+        You will be assigned to a squad within 24 hours
+      </p>
+      <div
+        className="mt-4 flex items-center justify-center gap-1 font-display text-3xl font-extrabold tabular-nums text-text"
+        role="timer"
+        aria-live="polite"
+        aria-label={`${countdown.hours} hours ${countdown.minutes} minutes ${countdown.seconds} seconds remaining`}
+      >
+        <span>{two(countdown.hours)}</span>
+        <span className="text-text-faint">:</span>
+        <span>{two(countdown.minutes)}</span>
+        <span className="text-text-faint">:</span>
+        <span>{two(countdown.seconds)}</span>
+      </div>
+      <div className="mt-1 flex items-center justify-center gap-6 text-[11px] uppercase tracking-[0.08em] text-text-faint">
+        <span>Hours</span>
+        <span>Minutes</span>
+        <span>Seconds</span>
+      </div>
+      <p className="mt-4 text-xs text-text-faint">
+        {countdown.expired
+          ? "Any moment now -- we're checking automatically, no need to refresh."
+          : "We're checking automatically in the background, no need to refresh."}
+      </p>
+    </div>
+  );
+}
+
 export default function SubscribePage() {
   const router = useRouter();
   const [session, setSession] = useState<StoredSession | null>(null);
@@ -116,6 +170,29 @@ export default function SubscribePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch-on-mount, setState only happens after the request resolves
     if (session?.student) load();
   }, [session, load]);
+
+  // Countdown clock for the post-payment screens ("pending" and
+  // "approved") -- ticks once a second only while one of those is
+  // showing, so we're not running a timer in the background on every
+  // other screen of this page.
+  const showsCountdown = screen.state === "pending" || screen.state === "approved";
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!showsCountdown) return;
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [showsCountdown]);
+
+  // While waiting on either post-payment screen, keep re-checking in the
+  // background for a squad -- the moment one exists, `load()` flips
+  // `screen` to "has-squad" and this screen is replaced automatically.
+  useEffect(() => {
+    if (!showsCountdown) return;
+    const poll = setInterval(() => {
+      load();
+    }, 20000);
+    return () => clearInterval(poll);
+  }, [showsCountdown, load]);
 
   function handleApplyPromo() {
     const normalizedCode = promoCode.trim();
@@ -191,6 +268,9 @@ export default function SubscribePage() {
             Trx ID <span className="font-semibold text-text">{screen.payment.trx_id}</span> is
             being reviewed. This is usually quick — check back shortly.
           </p>
+
+          <AssignmentCountdown payment={screen.payment} now={now} />
+
           <button onClick={load} className="btn btn-secondary mt-6">
             Check Again
           </button>
@@ -205,6 +285,9 @@ export default function SubscribePage() {
         <div className="card w-full max-w-md px-6 py-8 text-center">
           <p className="eyebrow text-emerald">Payment Approved</p>
           <h1 className="mt-2 font-display text-3xl font-extrabold text-text">You&apos;re all set</h1>
+
+          <AssignmentCountdown payment={screen.payment} now={now} />
+
           <Link href="/squad/find" className="btn btn-primary mt-6 inline-flex">
             Find My Squad
           </Link>
