@@ -45,7 +45,7 @@ import type {
 
 // In dev this is the backend's local port. Overridable via env for later
 // (staging/prod) without touching call sites.
-const BASE_URL =
+export const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
 
 const TOKEN_KEY = "study-squad:token";

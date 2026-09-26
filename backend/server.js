@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const { Server: SocketIOServer } = require('socket.io');
 const pool = require('./db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -10,6 +12,21 @@ const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind, single
 const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Squad Notes chat used to work by having every open chat tab poll
+// GET /squads/:squadId/messages every few seconds, forever, whether or
+// not anyone was actually typing -- that request volume was the single
+// biggest driver of load under real traffic. `server` wraps the same
+// Express `app` so Socket.io can share one HTTP server/port with the
+// existing REST API instead of needing a second port or process.
+const server = http.createServer(app);
+const io = new SocketIOServer(server, {
+  // Matches the permissive `app.use(cors())` below -- this app has no
+  // cookie-based auth for Socket.io to protect, only the same JWT already
+  // used on REST requests, so a wildcard origin here doesn't widen what's
+  // exposed.
+  cors: { origin: '*' },
+});
 
 // Keep the API usable under normal frontend traffic while limiting the
 // endpoints that are expensive or attractive to abuse. The default memory
@@ -71,6 +88,71 @@ const matchingLimiter = createLimiter({
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(apiLimiter);
+
+// --- Socket.io: authenticated realtime push for Squad Notes chat ---
+// Sending a message still goes entirely through the REST endpoint further
+// down (so file/voice uploads keep working exactly as before) -- Socket.io
+// only replaces how *other* squad members find out a message arrived, so
+// they no longer have to poll for it.
+//
+// A client authenticates once at connection time with the same JWT it
+// already sends as a Bearer token on REST requests (passed here as
+// `socket.handshake.auth.token` instead of a header, since the initial
+// Socket.io handshake is a plain HTTP request but subsequent realtime
+// traffic isn't). Membership is re-checked on every `join_squad`, exactly
+// like the REST GET endpoint below re-checks it on every request -- a
+// socket can't be used to read a squad's chat just by guessing its id.
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error('No token provided.'));
+  try {
+    socket.decoded = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    next(new Error('Invalid or expired token.'));
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.on('join_squad', async (squadId, callback) => {
+    const ack = typeof callback === 'function' ? callback : () => {};
+    const id = parseInt(squadId, 10);
+    if (!Number.isFinite(id)) return ack({ error: 'Invalid squad id.' });
+
+    try {
+      const squadResult = await pool.query('SELECT mentor_id FROM squads WHERE id = $1', [id]);
+      if (squadResult.rows.length === 0) return ack({ error: 'Squad not found.' });
+      const squad = squadResult.rows[0];
+
+      let authorized = false;
+      if (socket.decoded.role === 'mentor' && socket.decoded.mentorId === squad.mentor_id) {
+        authorized = true;
+      } else if (socket.decoded.studentId) {
+        const memberCheck = await pool.query(
+          `SELECT status FROM squad_members WHERE squad_id = $1 AND student_id = $2`,
+          [id, socket.decoded.studentId]
+        );
+        authorized = memberCheck.rows.length > 0 && memberCheck.rows[0].status === 'confirmed';
+      }
+
+      if (!authorized) return ack({ error: 'You are not authorized to join this squad.' });
+
+      // A tab only ever needs one squad's messages at a time, so leaving
+      // any other room first keeps a long-lived connection (e.g. a tab
+      // left open while the user browses to a different squad) from
+      // quietly accumulating memberships in rooms it no longer needs.
+      for (const room of socket.rooms) {
+        if (room.startsWith('squad:') && room !== `squad:${id}`) socket.leave(room);
+      }
+
+      socket.join(`squad:${id}`);
+      ack({ ok: true });
+    } catch (err) {
+      console.error(err);
+      ack({ error: 'Something went wrong joining the squad.' });
+    }
+  });
+});
 
 // Strips spaces/dashes from a student-entered phone number so the same
 // number typed slightly differently ("017 1234 5678" vs "01712345678")
@@ -1560,7 +1642,27 @@ app.post('/squads/:squadId/messages', requireAuth, messageLimiter, singleChatAtt
       ]
     );
 
-    res.status(201).json(insertResult.rows[0]);
+    const created = insertResult.rows[0];
+    res.status(201).json(created);
+
+    // Push to everyone else currently viewing this squad's chat. Looked up
+    // again with the sender_name join (the plain `RETURNING *` above
+    // doesn't have it -- see SquadMessageInsertResult's comment in
+    // lib/types.ts on the frontend) since other clients don't know who
+    // sent it the way the sender's own optimistic append does. Kept after
+    // `res.json` so a slow or failed broadcast never delays or breaks the
+    // sender's own response.
+    try {
+      const enriched = await pool.query(
+        `SELECT ${SQUAD_MESSAGE_COLUMNS} FROM squad_messages sm WHERE sm.id = $1`,
+        [created.id]
+      );
+      if (enriched.rows[0]) {
+        io.to(`squad:${squadId}`).emit('new_message', enriched.rows[0]);
+      }
+    } catch (broadcastErr) {
+      console.error('Failed to broadcast new message over socket:', broadcastErr);
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong sending the message.' });
@@ -2270,7 +2372,7 @@ app.patch('/submissions/:submissionId/rate', requireAuth, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 
   // Task 37: also sweep automatically once an hour, so squads don't

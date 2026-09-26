@@ -15,11 +15,11 @@ import {
   StoredSession,
 } from "@/lib/api";
 import type { SquadMessage } from "@/lib/types";
+import { getSocket } from "@/lib/socket";
 import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { UiIcon } from "@/components/layout/DockIcons";
 
-const POLL_INTERVAL_MS = 7000;
 const MAX_RECORDING_SECONDS = 120;
 
 // How many messages to request on the initial load and on each
@@ -298,7 +298,12 @@ function SquadNotesContent() {
     // that closes over it) stays stable across message updates.
   }, [access]);
 
-  // ---- Polling: fetch only messages newer than the last one we have ----
+  // ---- Reconnect catch-up: fetch only messages newer than the last one we have ----
+  // New messages normally arrive over the socket connection below in
+  // real time. This is called once whenever that connection is (re)established
+  // -- including the very first connect -- to fetch anything sent during
+  // the gap: between this page loading and the socket finishing its
+  // handshake, or during any dropped-connection/reconnect in between.
   const pollNewMessages = useCallback(async (squadId: number) => {
     if (pollInFlightRef.current) return;
     const current = messagesRef.current;
@@ -340,10 +345,51 @@ function SquadNotesContent() {
 
   useEffect(() => {
     if (access.state !== "ready") return;
+    const squadId = access.squadId;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadInitialMessages(access.squadId);
-    const interval = setInterval(() => pollNewMessages(access.squadId), POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    loadInitialMessages(squadId);
+
+    const socket = getSocket();
+
+    function handleNewMessage(row: SquadMessage) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === row.id)) return prev;
+        if (isNearBottomRef.current) {
+          pendingScrollActionRef.current = { type: "bottom" };
+        }
+        return [...prev, row];
+      });
+      markNotesSeen(squadId, row.created_at);
+    }
+
+    function handleConnect() {
+      socket.emit("join_squad", squadId, (ack: { ok?: boolean; error?: string } | undefined) => {
+        if (ack?.error) {
+          // Silent, consistent with this screen's other soft-fail network
+          // handling -- the REST fallback below still covers this squad
+          // until the next reconnect attempt succeeds in joining the room.
+          console.error("Couldn't join squad chat room:", ack.error);
+          return;
+        }
+        // Covers the gap between page load and this connection finishing
+        // (and any reconnect gap) -- see pollNewMessages's comment above.
+        pollNewMessages(squadId);
+      });
+    }
+
+    socket.on("connect", handleConnect);
+    socket.on("new_message", handleNewMessage);
+    if (socket.connected) {
+      handleConnect();
+    } else {
+      socket.connect();
+    }
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("new_message", handleNewMessage);
+      socket.disconnect();
+    };
   }, [access, loadInitialMessages, pollNewMessages]);
 
   function handleScroll() {
