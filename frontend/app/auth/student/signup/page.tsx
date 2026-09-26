@@ -175,6 +175,17 @@ function StudentSignupForm() {
           />
 
           <FormError message={error} />
+          <p className="text-xs leading-relaxed text-text-faint">
+            By opening your dossier, you agree to Study Squad&apos;s{" "}
+            <Link href="/terms" className="text-cyan underline underline-offset-2">
+              Terms &amp; Conditions
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="text-cyan underline underline-offset-2">
+              Privacy Policy
+            </Link>
+            .
+          </p>
           <SubmitButton loading={loading}>Open My Dossier</SubmitButton>
         </form>
 

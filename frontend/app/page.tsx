@@ -78,9 +78,6 @@ export default function Home() {
               <Link href="/auth/student/login" className="btn btn-primary min-h-[52px] px-7 text-base lg:min-h-[58px] lg:px-8 lg:text-[1rem]">
                 I&apos;m a Scholar
               </Link>
-              <Link href="/auth/mentor/login" className="btn btn-secondary min-h-[52px] px-7 text-base lg:min-h-[58px] lg:px-8 lg:text-[1rem]">
-                I&apos;m a Mentor
-              </Link>
             </div>
             <div className="mt-10 flex items-center gap-4 lg:mt-12 lg:gap-6">
               <div className="flex -space-x-3 lg:-space-x-4">
