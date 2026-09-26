@@ -33,8 +33,7 @@ const GROUP_META: Record<
     icon: "trend",
     blurb: "Accounting, Finance, Marketing and more — pick 6 subjects and match with scholars who balance out your strengths.",
     accent: "from-emerald to-cyan",
-    // No gate image yet -- see Task 2 (aspirant-type backgrounds); add one
-    // here once a Commerce gate/campus image is supplied.
+    gateImage: "/images/gates/arts-jahangirnagar.webp",
   },
 };
 
@@ -42,7 +41,7 @@ export default function Home() {
   return (
     <main className="flex-1">
       <HomeRedirect />
-      <section className="relative mx-auto max-w-7xl overflow-hidden px-6 pb-24 pt-16 sm:pt-24 lg:px-8 lg:pb-28 lg:pt-20">
+      <section className="relative mx-auto max-w-7xl overflow-hidden px-4 pb-24 pt-5 sm:pt-24 lg:px-8 lg:pb-28 lg:pt-20">
         <div className="glow-orb h-[28rem] w-[28rem] bg-indigo/25" style={{ top: "-6rem", left: "-8rem" }} />
         <div className="glow-orb h-96 w-96 bg-cyan/15" style={{ top: "2rem", right: "-6rem" }} />
 
@@ -63,16 +62,17 @@ export default function Home() {
         <div className="relative z-10 grid items-center gap-16 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10 xl:gap-16">
           <div className="animate-fade-in-up lg:pr-4">
             <span className="badge badge-indigo inline-flex items-center gap-1.5 lg:mb-2 lg:px-4 lg:py-2 lg:text-sm"><UiIcon name="sparkle" className="h-3.5 w-3.5" />Peer-matched squads, not random chats</span>
-            <h1 className="mt-5 font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-text sm:text-6xl lg:mt-6 lg:text-[4.3rem] lg:leading-[0.92] xl:text-[5rem]">
+            <h1 className="mt-1 font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-text sm:text-6xl lg:mt-3 lg:text-[4.3rem] lg:leading-[0.92] xl:text-[5rem]">
               Your squad is <span className="text-gradient-brand">waiting</span> for you.
             </h1>
             <div className="lg:max-w-[36rem]">
               <HeroImageSlider />
             </div>
-            <p className="mt-5 max-w-lg text-lg text-text-dim lg:mt-7 lg:max-w-xl lg:text-[1.08rem] lg:leading-8">
-              Study Squad matches you with five other ambitious students —
-              chosen so your strengths and gaps balance each other out.
-              Real accountability. Real progress. Every day.
+            <p className="mt-1 max-w-lg text-lg text-text-dim lg:mt-2 lg:max-w-xl lg:text-[1.08rem] lg:leading-8">
+               কাল থেকে সিরিয়াসলি পড়ব”—এই কালটা কি আর আসে? 
+               HSC, admission, পড়ার চাপ—সবকিছু একা সামলানো কঠিন।
+               Study Squad-এ তোমার সাথে থাকবে আরও ৫ জন। একসাথে পড়ব, একে অপরকে push করব, 
+               আর পিছিয়ে পড়লে আবার উঠে দাঁড়াব।
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row lg:mt-10 lg:max-w-[30rem] lg:gap-4">
               <Link href="/auth/student/login" className="btn btn-primary min-h-[52px] px-7 text-base lg:min-h-[58px] lg:px-8 lg:text-[1rem]">
