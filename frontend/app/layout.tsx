@@ -19,6 +19,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { AspirantBackground } from "@/components/layout/AspirantBackground";
 import { SquadChatFloatingButton } from "@/components/layout/SquadChatFloatingButton";
+import { SubscriptionReminderPopup } from "@/components/layout/SubscriptionReminderPopup";
 
 export const metadata: Metadata = {
   title: "Study Squad",
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <BottomNav />
         <SquadChatFloatingButton />
+        <SubscriptionReminderPopup />
       </body>
     </html>
   );

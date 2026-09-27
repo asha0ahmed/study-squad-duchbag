@@ -14,7 +14,9 @@ import type {
   AdminMentorRecord,
   AdminComplaint,
   AdminPayment,
+  AdminReminder,
   AdminStudentRecord,
+  AdminSubscriptionRecord,
   ApiErrorBody,
   InviteResult,
   JoinResult,
@@ -460,6 +462,54 @@ export function adminSearchStudents(secret: string, query: string) {
     `/admin/students/search?query=${encodeURIComponent(query)}`,
     { skipAuth: true, adminSecret: secret }
   );
+}
+
+// ---- Admin: subscription expiry, removal, reminders ----
+
+export function adminListSubscriptions(secret: string, filter?: "expired") {
+  const query = filter ? `?filter=${filter}` : "";
+  return request<AdminSubscriptionRecord[]>(`/admin/subscriptions${query}`, {
+    skipAuth: true,
+    adminSecret: secret,
+  });
+}
+
+/** Removes a student's access (blocks login immediately) and kicks them out of their squad. */
+export function adminRemoveStudent(secret: string, studentId: number) {
+  return request<{ id: number; status: string; removed_from_squad_id: number | null }>(
+    `/admin/students/${studentId}/remove`,
+    { method: "PATCH", skipAuth: true, adminSecret: secret }
+  );
+}
+
+export function adminRestoreStudent(secret: string, studentId: number) {
+  return request<{ id: number; status: string }>(`/admin/students/${studentId}/restore`, {
+    method: "PATCH",
+    skipAuth: true,
+    adminSecret: secret,
+  });
+}
+
+/** Sends an in-app popup reminder to a student (e.g. "your subscription expires soon"). */
+export function adminRemindStudent(secret: string, studentId: number, message?: string) {
+  return request<AdminReminder>(`/admin/students/${studentId}/remind`, {
+    method: "POST",
+    skipAuth: true,
+    adminSecret: secret,
+    body: message ? { message } : undefined,
+  });
+}
+
+// ---- Student: reminder popups sent by an admin ----
+
+export function getUnseenReminder(studentId: number) {
+  return request<AdminReminder | null>(`/students/${studentId}/reminders/unseen`);
+}
+
+export function dismissReminder(studentId: number, reminderId: number) {
+  return request<AdminReminder>(`/students/${studentId}/reminders/${reminderId}/seen`, {
+    method: "PATCH",
+  });
 }
 
 export function adminListMentors(secret: string) {

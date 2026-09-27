@@ -7,6 +7,7 @@ import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 
 const ADMIN_NAV_ITEMS: Array<{ href: string; label: string; icon: UiIconName }> = [
   { href: "/admin/students", label: "Student Records", icon: "award" },
+  { href: "/admin/subscriptions", label: "Subscriptions", icon: "credit-card" },
   { href: "/admin/mentors", label: "Mentor Records", icon: "compass" },
   { href: "/admin/payments", label: "Payments", icon: "credit-card" },
   { href: "/admin/complaints", label: "Complaints", icon: "inbox" },

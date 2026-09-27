@@ -639,8 +639,8 @@ app.post('/students/:id/subjects', requireAuth, async (req, res) => {
 // Submission is self-reported (phone + Trx ID) and reviewed by an admin.
 
 const PAYMENT_PLANS = {
-  '1_month': 99,
-  '6_month': 499,
+  '1_month': { amount: 99, months: 1 },
+  '6_month': { amount: 499, months: 6 },
 };
 const PAYMENT_METHODS = ['nagad', 'bkash'];
 
@@ -678,7 +678,7 @@ app.post('/students/:id/payments', requireAuth, async (req, res) => {
       });
     }
 
-    const amount = PAYMENT_PLANS[plan];
+    const amount = PAYMENT_PLANS[plan].amount;
     const result = await pool.query(
       `INSERT INTO payments (student_id, plan, amount, method, sender_phone, trx_id, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
@@ -759,8 +759,13 @@ app.patch('/admin/payments/:paymentId/approve', adminLimiter, async (req, res) =
   }
 
   try {
+    // expires_at = the moment of approval + the plan's own duration (1 or
+    // 6 months) -- this is what actually makes the subscription end.
+    // Read off the row's own `plan` column via CASE rather than trusting
+    // anything from the request body.
     const result = await pool.query(
-      `UPDATE payments SET status = 'approved', reviewed_at = NOW()
+      `UPDATE payments SET status = 'approved', reviewed_at = NOW(),
+              expires_at = NOW() + (CASE plan WHEN '1_month' THEN INTERVAL '1 month' ELSE INTERVAL '6 months' END)
        WHERE id = $1 AND status = 'pending'
        RETURNING *`,
       [req.params.paymentId]
@@ -883,7 +888,8 @@ app.get('/admin/students/search', adminLimiter, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT DISTINCT s.id, s.name, s.email, s.institution, s.year,
-              s.academic_group, s.aspirant_type, s.matching_status, s.created_at
+              s.academic_group, s.aspirant_type, s.matching_status, s.status,
+              s.removed_at, s.created_at
        FROM students s
        LEFT JOIN payments p ON p.student_id = s.id
        WHERE s.email ILIKE $1
@@ -898,8 +904,9 @@ app.get('/admin/students/search', adminLimiter, async (req, res) => {
       return res.status(404).json({ error: 'No student matched that email, phone number, or transaction ID.' });
     }
 
-    // Attach current squad + latest payment for context, without leaking
-    // password hashes or other students' data.
+    // Attach current squad + latest payment (including expires_at, so the
+    // admin can see at a glance how much subscription time is left) for
+    // context, without leaking password hashes or other students' data.
     const students = await Promise.all(
       result.rows.map(async (student) => {
         const squadResult = await pool.query(
@@ -910,7 +917,7 @@ app.get('/admin/students/search', adminLimiter, async (req, res) => {
           [student.id]
         );
         const paymentResult = await pool.query(
-          `SELECT plan, amount, method, sender_phone, trx_id, status, created_at
+          `SELECT plan, amount, method, sender_phone, trx_id, status, created_at, reviewed_at, expires_at
            FROM payments WHERE student_id = $1
            ORDER BY created_at DESC LIMIT 1`,
           [student.id]
@@ -927,6 +934,196 @@ app.get('/admin/students/search', adminLimiter, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong searching for that student.' });
+  }
+});
+
+// Admin: every student's current subscription at a glance -- their
+// latest approved payment's plan and expires_at, sorted soonest-expiring
+// (or already-expired) first, so an admin can see who's about to run out
+// of time without searching one student at a time. Optional
+// ?filter=expired restricts to subscriptions that have already lapsed.
+app.get('/admin/subscriptions', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const filter = req.query.filter; // optional: 'expired'
+
+  try {
+    // DISTINCT ON picks each student's single most recent approved
+    // payment; ordering that group by created_at DESC keeps the latest
+    // one, and the outer ORDER BY then sorts everyone by how much time
+    // (if any) they have left.
+    const result = await pool.query(
+      `SELECT * FROM (
+         SELECT DISTINCT ON (p.student_id)
+                p.id AS payment_id, p.plan, p.amount, p.expires_at, p.reviewed_at,
+                s.id AS student_id, s.name AS student_name, s.email AS student_email,
+                s.status AS student_status
+         FROM payments p
+         JOIN students s ON s.id = p.student_id
+         WHERE p.status = 'approved'
+         ORDER BY p.student_id, p.created_at DESC
+       ) latest
+       ${filter === 'expired' ? "WHERE latest.expires_at <= NOW()" : ''}
+       ORDER BY latest.expires_at ASC NULLS LAST`
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading subscriptions.' });
+  }
+});
+
+// Admin: remove a student -- e.g. their subscription lapsed and was
+// never renewed. This is a soft removal (status flips to 'removed', row
+// is kept) so squad history, task submissions, and payment records all
+// stay intact; requireAuth rejects every future request from this
+// student (and blocks login) until an admin restores them. Also kicks
+// them out of their current squad immediately, same as a self-service
+// squad leave would, so the other 5 members aren't left waiting on
+// someone who's been removed.
+app.patch('/admin/students/:id/remove', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const studentId = req.params.id;
+
+  try {
+    const result = await pool.query(
+      `UPDATE students SET status = 'removed', removed_at = NOW(), matching_status = 'not_started'
+       WHERE id = $1
+       RETURNING id, name, email, status, removed_at`,
+      [studentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found.' });
+    }
+
+    const squadResult = await pool.query(
+      `SELECT squad_id FROM squad_members WHERE student_id = $1`,
+      [studentId]
+    );
+    const squadId = squadResult.rows[0]?.squad_id ?? null;
+
+    await pool.query(`DELETE FROM squad_members WHERE student_id = $1`, [studentId]);
+    await pool.query(`DELETE FROM squad_subject_coverage WHERE student_id = $1`, [studentId]);
+
+    res.json({ ...result.rows[0], removed_from_squad_id: squadId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong removing this student.' });
+  }
+});
+
+// Admin: undo a removal (e.g. the student renewed / it was a mistake).
+app.patch('/admin/students/:id/restore', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE students SET status = 'active', removed_at = NULL
+       WHERE id = $1
+       RETURNING id, name, email, status, removed_at`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong restoring this student.' });
+  }
+});
+
+// Admin: send a reminder to a student -- shows as a popup the next time
+// they open the app (see GET /students/:id/reminders/unseen). Typical
+// use: their subscription is about to expire and they haven't renewed.
+app.post('/admin/students/:id/remind', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const message = (req.body?.message || '').trim() ||
+    'Your Study Squad subscription is ending soon. Renew now to keep your squad access.';
+
+  try {
+    const studentCheck = await pool.query('SELECT id FROM students WHERE id = $1', [req.params.id]);
+    if (studentCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found.' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO admin_reminders (student_id, message) VALUES ($1, $2) RETURNING *`,
+      [req.params.id, message]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong sending this reminder.' });
+  }
+});
+
+// Student: the oldest unseen reminder waiting for them, if any -- polled
+// on app load so it can be shown as a popup. Only ever returns one at a
+// time (oldest first) so a student who missed several isn't hit with a
+// stack of popups at once; they'll see the next one after dismissing.
+app.get('/students/:id/reminders/unseen', requireAuth, async (req, res) => {
+  const studentId = parseInt(req.params.id);
+  if (studentId !== req.student.studentId) {
+    return res.status(403).json({ error: 'You can only view your own reminders.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM admin_reminders WHERE student_id = $1 AND seen_at IS NULL
+       ORDER BY created_at ASC LIMIT 1`,
+      [studentId]
+    );
+
+    res.json(result.rows[0] || null);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading your reminders.' });
+  }
+});
+
+// Student: dismiss a reminder popup so it never shows again.
+app.patch('/students/:id/reminders/:reminderId/seen', requireAuth, async (req, res) => {
+  const studentId = parseInt(req.params.id);
+  if (studentId !== req.student.studentId) {
+    return res.status(403).json({ error: 'You can only dismiss your own reminders.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE admin_reminders SET seen_at = NOW()
+       WHERE id = $1 AND student_id = $2
+       RETURNING *`,
+      [req.params.reminderId, studentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Reminder not found.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong dismissing this reminder.' });
   }
 });
 
@@ -997,16 +1194,23 @@ app.post('/students/:id/match', requireAuth, matchingLimiter, async (req, res) =
     }
 
     // Mentor-fee subscription gate: matching requires an admin-approved
-    // payment on file. See POST /students/:id/payments and the
-    // /admin/payments review endpoints.
+    // payment on file that hasn't expired yet. See POST
+    // /students/:id/payments and the /admin/payments review endpoints.
     const paymentCheck = await pool.query(
-      `SELECT id FROM payments WHERE student_id = $1 AND status = 'approved'
+      `SELECT id, expires_at FROM payments WHERE student_id = $1 AND status = 'approved'
        ORDER BY created_at DESC LIMIT 1`,
       [studentId]
     );
-    if (paymentCheck.rows.length === 0) {
+    const activePayment = paymentCheck.rows[0];
+    if (!activePayment) {
       return res.status(402).json({
         error: 'A confirmed mentor-fee payment is required before matching. Submit a payment and wait for admin approval.',
+      });
+    }
+    if (activePayment.expires_at && new Date(activePayment.expires_at) <= new Date()) {
+      return res.status(402).json({
+        error: 'Your mentor-fee subscription has expired. Submit a new payment and wait for admin approval.',
+        subscriptionExpired: true,
       });
     }
 
@@ -1977,6 +2181,10 @@ app.post('/login', authLimiter, async (req, res) => {
 
     if (!passwordMatches) {
       return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    if (student.status === 'removed') {
+      return res.status(403).json({ error: 'This account has been removed. Contact support if you believe this is a mistake.' });
     }
 
     const token = jwt.sign(

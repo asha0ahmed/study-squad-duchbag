@@ -16,6 +16,7 @@ import {
 import type { StudentSquadView, SquadSuggestion } from "@/lib/types";
 import { StatusBadge } from "@/components/squad/StatusBadge";
 import { BetterSquadBanner } from "@/components/squad/BetterSquadBanner";
+import { SubscriptionStatus } from "@/components/squad/SubscriptionStatus";
 import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
 
@@ -138,6 +139,7 @@ export default function SquadPage() {
         <h1 className="mt-1 font-display text-4xl font-extrabold tracking-tight text-text">
           {squadData.academic_group} · {squadData.year}
         </h1>
+        {session.student && <SubscriptionStatus studentId={session.student.id} />}
 
         <FormError message={error} />
 

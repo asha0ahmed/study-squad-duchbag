@@ -203,11 +203,38 @@ export interface Payment {
   status: PaymentStatus;
   created_at: string;
   reviewed_at: string | null;
+  /** Set once the payment is approved: reviewed_at + the plan's duration (1 or 6 months). Null until then. */
+  expires_at: string | null;
 }
 
 export interface AdminPayment extends Payment {
   student_name: string;
   student_email: string;
+}
+
+/** A student's account state -- 'removed' blocks login and every authenticated request. */
+export type StudentAccountStatus = "active" | "removed";
+
+/** Row from GET /admin/subscriptions -- one per student's latest approved payment. */
+export interface AdminSubscriptionRecord {
+  payment_id: number;
+  plan: PaymentPlan;
+  amount: number;
+  expires_at: string | null;
+  reviewed_at: string | null;
+  student_id: number;
+  student_name: string;
+  student_email: string;
+  student_status: StudentAccountStatus;
+}
+
+/** A reminder popup an admin sent a student (e.g. "renew your subscription"). */
+export interface AdminReminder {
+  id: number;
+  student_id: number;
+  message: string;
+  created_at: string;
+  seen_at: string | null;
 }
 
 // ---- Student complaints ----
@@ -293,6 +320,8 @@ export interface AdminStudentRecord {
   academic_group: AcademicGroup | null;
   aspirant_type: string | null;
   matching_status: MatchingStatus;
+  status: StudentAccountStatus;
+  removed_at: string | null;
   created_at: string;
   squad: AdminStudentSquad | null;
   latest_payment: Payment | null;

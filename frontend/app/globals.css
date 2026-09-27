@@ -20,6 +20,7 @@
   --cyan: #22d3ee;
   --emerald: #34d399;
   --coral: #fb7185;
+  --amber: #fbbf24;
 
   --text: #f8fafc;
   --text-dim: #94a3b8;
@@ -30,6 +31,7 @@
   --cyan-rgb: 34, 211, 238;
   --emerald-rgb: 52, 211, 153;
   --coral-rgb: 251, 113, 133;
+  --amber-rgb: 251, 191, 36;
 
   /* Glassmorphism (frosted card) tuning -- change these three to restyle
      every .card / .card-flat in the app at once. See ".card" below. */
@@ -52,6 +54,7 @@
   --color-cyan: var(--cyan);
   --color-emerald: var(--emerald);
   --color-coral: var(--coral);
+  --color-amber: var(--amber);
 
   --color-text: var(--text);
   --color-text-dim: var(--text-dim);
@@ -406,6 +409,11 @@ select.input {
   color: #fecdd6;
   background: rgba(var(--coral-rgb), 0.13);
   border-color: rgba(var(--coral-rgb), 0.35);
+}
+.badge-amber {
+  color: #fde5a8;
+  background: rgba(var(--amber-rgb), 0.13);
+  border-color: rgba(var(--amber-rgb), 0.35);
 }
 .badge-neutral {
   color: var(--color-text-dim);

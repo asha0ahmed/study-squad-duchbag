@@ -11,6 +11,12 @@ CREATE TABLE students (
   academic_group VARCHAR(50),
   aspirant_type VARCHAR(60),
   matching_status VARCHAR(20) DEFAULT 'not_started',
+  -- Admin can remove a student (e.g. subscription lapsed and was never
+  -- renewed) without deleting their row -- keeps their squad history,
+  -- submissions, and payment records intact, but blocks all further API
+  -- access via requireAuth. See PATCH /admin/students/:id/remove.
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
+  removed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -204,11 +210,17 @@ CREATE TABLE payments (
   trx_id VARCHAR(50) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at TIMESTAMP DEFAULT NOW(),
-  reviewed_at TIMESTAMP
+  reviewed_at TIMESTAMP,
+  -- Set the moment an admin approves the payment: reviewed_at + 1 or 6
+  -- months depending on `plan`. NULL until approved. This is what makes
+  -- the subscription actually end -- see the plan gate in POST
+  -- /students/:id/match and GET /admin/subscriptions.
+  expires_at TIMESTAMP
 );
 
 CREATE INDEX idx_payments_student ON payments(student_id);
 CREATE INDEX idx_payments_status ON payments(status);
+CREATE INDEX idx_payments_expires_at ON payments(expires_at);
 
 -- Student complaints submitted from the More menu and reviewed by admins.
 CREATE TABLE complaints (
@@ -220,3 +232,19 @@ CREATE TABLE complaints (
 
 CREATE INDEX idx_complaints_student ON complaints(student_id);
 CREATE INDEX idx_complaints_created_at ON complaints(created_at);
+
+-- Admin-sent reminders (e.g. "your subscription is about to expire,
+-- renew now"), surfaced to the student as an in-app popup the next time
+-- they open the app. Sent from GET /admin/subscriptions via the
+-- Reminder button; seen_at is set once the student's client has shown
+-- and dismissed it, so it's never shown twice.
+CREATE TABLE admin_reminders (
+  id SERIAL PRIMARY KEY,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  seen_at TIMESTAMP
+);
+
+CREATE INDEX idx_admin_reminders_student ON admin_reminders(student_id);
+CREATE INDEX idx_admin_reminders_unseen ON admin_reminders(student_id) WHERE seen_at IS NULL;

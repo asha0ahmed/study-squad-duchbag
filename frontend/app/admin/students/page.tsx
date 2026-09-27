@@ -2,8 +2,15 @@
 
 import { UiIcon } from "@/components/layout/DockIcons";
 import { useState } from "react";
-import { ApiError, adminSearchStudents, getAdminSecret } from "@/lib/api";
+import {
+  ApiError,
+  adminRemoveStudent,
+  adminRestoreStudent,
+  adminSearchStudents,
+  getAdminSecret,
+} from "@/lib/api";
 import type { AdminStudentRecord } from "@/lib/types";
+import { timeLeftLabel } from "@/lib/subscriptionTime";
 
 type Screen =
   | { state: "idle" }
@@ -19,6 +26,8 @@ function formatDate(iso: string) {
 export default function AdminStudentsPage() {
   const [query, setQuery] = useState("");
   const [screen, setScreen] = useState<Screen>({ state: "idle" });
+  const [actingId, setActingId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -27,6 +36,7 @@ export default function AdminStudentsPage() {
     if (!secret || !trimmed) return;
 
     setScreen({ state: "loading" });
+    setActionError(null);
     try {
       const students = await adminSearchStudents(secret, trimmed);
       setScreen({ state: "results", students });
@@ -39,6 +49,62 @@ export default function AdminStudentsPage() {
           message: err instanceof ApiError ? err.message : "Couldn't search right now. Try again.",
         });
       }
+    }
+  }
+
+  async function handleRemove(student: AdminStudentRecord) {
+    const secret = getAdminSecret();
+    if (!secret) return;
+    // Manual-only by design -- this confirm is the one deliberate step
+    // that actually removes access and pulls them from their squad.
+    const confirmed = window.confirm(
+      `Remove ${student.name}? This blocks their login immediately and kicks them out of their squad. Their history is kept -- you can restore them right here afterwards.`
+    );
+    if (!confirmed) return;
+
+    setActingId(student.id);
+    setActionError(null);
+    try {
+      await adminRemoveStudent(secret, student.id);
+      setScreen((prev) =>
+        prev.state === "results"
+          ? {
+              state: "results",
+              students: prev.students.map((s) =>
+                s.id === student.id ? { ...s, status: "removed", removed_at: new Date().toISOString(), squad: null } : s
+              ),
+            }
+          : prev
+      );
+    } catch {
+      setActionError("Couldn't remove that student. Try again.");
+    } finally {
+      setActingId(null);
+    }
+  }
+
+  async function handleRestore(student: AdminStudentRecord) {
+    const secret = getAdminSecret();
+    if (!secret) return;
+
+    setActingId(student.id);
+    setActionError(null);
+    try {
+      await adminRestoreStudent(secret, student.id);
+      setScreen((prev) =>
+        prev.state === "results"
+          ? {
+              state: "results",
+              students: prev.students.map((s) =>
+                s.id === student.id ? { ...s, status: "active", removed_at: null } : s
+              ),
+            }
+          : prev
+      );
+    } catch {
+      setActionError("Couldn't restore that student. Try again.");
+    } finally {
+      setActingId(null);
     }
   }
 
@@ -71,6 +137,12 @@ export default function AdminStudentsPage() {
         </form>
 
         <div className="mt-8">
+          {actionError && (
+            <div className="mb-4 rounded-xl border border-coral/40 bg-coral/10 px-4 py-3.5 text-sm text-coral">
+              {actionError}
+            </div>
+          )}
+
           {screen.state === "idle" && (
             <div className="card flex flex-col items-center gap-2 px-6 py-12 text-center">
               <UiIcon name="search" className="h-7 w-7 text-text-faint" />
@@ -110,7 +182,10 @@ export default function AdminStudentsPage() {
                       <p className="font-display text-lg font-bold text-text">{student.name}</p>
                       <p className="text-sm text-text-dim">{student.email}</p>
                     </div>
-                    <span className="badge badge-indigo">{student.matching_status}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {student.status === "removed" && <span className="badge badge-coral">removed</span>}
+                      <span className="badge badge-indigo">{student.matching_status}</span>
+                    </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -137,23 +212,63 @@ export default function AdminStudentsPage() {
                       Latest payment
                     </p>
                     {student.latest_payment ? (
-                      <p className="mt-1.5 text-sm text-text">
-                        ৳{student.latest_payment.amount} · {student.latest_payment.method} · Trx{" "}
-                        {student.latest_payment.trx_id} ·{" "}
-                        <span
-                          className={
-                            student.latest_payment.status === "approved"
-                              ? "text-emerald"
-                              : student.latest_payment.status === "pending"
-                              ? "text-cyan"
-                              : "text-coral"
-                          }
-                        >
-                          {student.latest_payment.status}
-                        </span>
-                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <p className="text-sm text-text">
+                          ৳{student.latest_payment.amount} · {student.latest_payment.method} · Trx{" "}
+                          {student.latest_payment.trx_id} ·{" "}
+                          <span
+                            className={
+                              student.latest_payment.status === "approved"
+                                ? "text-emerald"
+                                : student.latest_payment.status === "pending"
+                                ? "text-cyan"
+                                : "text-coral"
+                            }
+                          >
+                            {student.latest_payment.status}
+                          </span>
+                        </p>
+                        {student.latest_payment.status === "approved" &&
+                          (() => {
+                            const time = timeLeftLabel(student.latest_payment!.expires_at);
+                            return (
+                              <span
+                                className={
+                                  "badge " +
+                                  (time.tone === "coral"
+                                    ? "badge-coral"
+                                    : time.tone === "amber"
+                                    ? "badge-amber"
+                                    : "badge-emerald")
+                                }
+                              >
+                                {time.label}
+                              </span>
+                            );
+                          })()}
+                      </div>
                     ) : (
                       <p className="mt-1.5 text-sm text-text-faint">No payment submitted yet.</p>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex justify-end border-t border-border-soft pt-4">
+                    {student.status === "removed" ? (
+                      <button
+                        onClick={() => handleRestore(student)}
+                        disabled={actingId === student.id}
+                        className="btn btn-success !py-2 text-sm"
+                      >
+                        Restore access
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleRemove(student)}
+                        disabled={actingId === student.id}
+                        className="btn btn-danger !py-2 text-sm"
+                      >
+                        Remove
+                      </button>
                     )}
                   </div>
                 </div>
