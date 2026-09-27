@@ -869,6 +869,72 @@ app.get('/admin/complaints', adminLimiter, async (req, res) => {
 });
 
 
+// Attaches each student's current squad + latest payment (including
+// expires_at, so the admin can see at a glance how much subscription
+// time is left) for context, without leaking password hashes or other
+// students' data. Shared by both /admin/students/search and
+// /admin/students (the full, paginated list).
+async function attachSquadAndLatestPayment(students) {
+  return Promise.all(
+    students.map(async (student) => {
+      const squadResult = await pool.query(
+        `SELECT sq.id, sq.status, sq.academic_group, sq.year
+         FROM squad_members sm
+         JOIN squads sq ON sq.id = sm.squad_id
+         WHERE sm.student_id = $1`,
+        [student.id]
+      );
+      const paymentResult = await pool.query(
+        `SELECT plan, amount, method, sender_phone, trx_id, status, created_at, reviewed_at, expires_at
+         FROM payments WHERE student_id = $1
+         ORDER BY created_at DESC LIMIT 1`,
+        [student.id]
+      );
+      return {
+        ...student,
+        squad: squadResult.rows[0] || null,
+        latest_payment: paymentResult.rows[0] || null,
+      };
+    })
+  );
+}
+
+// Admin: every student, newest first, paginated -- this is what backs
+// the default view of the Student Records screen (the search box above
+// it narrows down to one match; this is what fills the page below it
+// the rest of the time). ?limit (default 20, max 50) and ?offset
+// (default 0) page through the full roster.
+app.get('/admin/students', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+
+  try {
+    const [studentsResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT id, name, email, institution, year, academic_group, aspirant_type,
+                matching_status, status, removed_at, created_at
+         FROM students
+         ORDER BY created_at DESC, id DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      ),
+      pool.query(`SELECT COUNT(*)::int AS total FROM students`),
+    ]);
+
+    const students = await attachSquadAndLatestPayment(studentsResult.rows);
+
+    res.json({ students, total: countResult.rows[0].total });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading student records.' });
+  }
+});
+
 // Admin: search for a single student by email, phone, or a payment
 // transaction ID. Only one identifier is required -- the caller doesn't
 // have to say which kind it is, since a student's phone number only
@@ -904,31 +970,7 @@ app.get('/admin/students/search', adminLimiter, async (req, res) => {
       return res.status(404).json({ error: 'No student matched that email, phone number, or transaction ID.' });
     }
 
-    // Attach current squad + latest payment (including expires_at, so the
-    // admin can see at a glance how much subscription time is left) for
-    // context, without leaking password hashes or other students' data.
-    const students = await Promise.all(
-      result.rows.map(async (student) => {
-        const squadResult = await pool.query(
-          `SELECT sq.id, sq.status, sq.academic_group, sq.year
-           FROM squad_members sm
-           JOIN squads sq ON sq.id = sm.squad_id
-           WHERE sm.student_id = $1`,
-          [student.id]
-        );
-        const paymentResult = await pool.query(
-          `SELECT plan, amount, method, sender_phone, trx_id, status, created_at, reviewed_at, expires_at
-           FROM payments WHERE student_id = $1
-           ORDER BY created_at DESC LIMIT 1`,
-          [student.id]
-        );
-        return {
-          ...student,
-          squad: squadResult.rows[0] || null,
-          latest_payment: paymentResult.rows[0] || null,
-        };
-      })
-    );
+    const students = await attachSquadAndLatestPayment(result.rows);
 
     res.json(students);
   } catch (err) {

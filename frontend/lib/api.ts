@@ -457,6 +457,13 @@ export function adminListComplaints(secret: string) {
 
 // ---- Admin: Student & Mentor records ----
 
+export function adminListStudents(secret: string, limit = 20, offset = 0) {
+  return request<{ students: AdminStudentRecord[]; total: number }>(
+    `/admin/students?limit=${limit}&offset=${offset}`,
+    { skipAuth: true, adminSecret: secret }
+  );
+}
+
 export function adminSearchStudents(secret: string, query: string) {
   return request<AdminStudentRecord[]>(
     `/admin/students/search?query=${encodeURIComponent(query)}`,

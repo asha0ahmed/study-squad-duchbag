@@ -385,10 +385,25 @@ function SquadNotesContent() {
       socket.connect();
     }
 
+    // Belt-and-suspenders fallback: new messages should arrive instantly
+    // over the socket above, but some hosting setups silently block or
+    // downgrade WebSocket upgrades (a proxy stripping the Upgrade header,
+    // a platform that only supports short-lived connections, etc) --
+    // when that happens the socket looks "connected" but never actually
+    // delivers `new_message` events, and without this, other members
+    // would only ever see a new message after a manual page reload. This
+    // guarantees messages still show up within a few seconds regardless,
+    // and is a no-op (deduped, no visible change) whenever the socket is
+    // already doing its job.
+    const fallbackPoll = setInterval(() => {
+      pollNewMessages(squadId);
+    }, 4000);
+
     return () => {
       socket.off("connect", handleConnect);
       socket.off("new_message", handleNewMessage);
       socket.disconnect();
+      clearInterval(fallbackPoll);
     };
   }, [access, loadInitialMessages, pollNewMessages]);
 
