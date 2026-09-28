@@ -33,6 +33,9 @@ psql -U postgres -d studysquad -f schema.sql
 > Already have a database from before this update? Just run the new
 > migration instead of the whole schema:
 > `psql -U postgres -d studysquad -f migrations/002_add_mentor_phone.sql`
+>
+> For the invite-link usage limit, also run:
+> `psql -U postgres -d studysquad -f migrations/014_limit_invite_link_uses.sql`
 
 Start the API (listens on **port 3000**):
 

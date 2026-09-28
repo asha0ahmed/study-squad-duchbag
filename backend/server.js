@@ -312,10 +312,14 @@ app.post('/students', registrationLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   }
 
+  const inviteClient = inviteCode ? await pool.connect() : null;
+  const inviteDb = inviteClient || pool;
+
   try {
+    if (inviteClient) await inviteClient.query('BEGIN');
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
+    const result = await inviteDb.query(
       `INSERT INTO students (name, email, phone, password_hash, institution, year, academic_group, aspirant_type)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, name, email, phone, institution, year, academic_group, aspirant_type, matching_status, created_at`,
@@ -326,12 +330,15 @@ app.post('/students', registrationLimiter, async (req, res) => {
 
     // If an invite code was provided, try to auto-join the squad
     if (inviteCode) {
-      const squadResult = await pool.query('SELECT * FROM squads WHERE invite_code = $1', [inviteCode]);
+      const squadResult = await inviteDb.query(
+        'SELECT * FROM squads WHERE invite_code = $1 FOR UPDATE',
+        [inviteCode]
+      );
 
       if (squadResult.rows.length > 0) {
         const squad = squadResult.rows[0];
 
-        const membersResult = await pool.query(
+        const membersResult = await inviteDb.query(
           'SELECT slot FROM squad_members WHERE squad_id = $1 ORDER BY slot',
           [squad.id]
         );
@@ -343,19 +350,22 @@ app.post('/students', registrationLimiter, async (req, res) => {
           while (takenSlots.includes(nextSlot)) nextSlot++;
         }
 
-        if (nextSlot !== null) {
-          await pool.query(
+        if (nextSlot !== null && squad.invite_uses < 2) {
+          await inviteDb.query(
+            'UPDATE squads SET invite_uses = invite_uses + 1 WHERE id = $1',
+            [squad.id]
+          );
+
+          await inviteDb.query(
             `INSERT INTO squad_members (squad_id, student_id, slot, join_type, status)
              VALUES ($1, $2, $3, 'invite', 'confirmed')`,
             [squad.id, newStudent.id, nextSlot]
           );
 
-          await pool.query(
+          await inviteDb.query(
             `UPDATE students SET matching_status = 'suggested' WHERE id = $1`,
             [newStudent.id]
           );
-
-          await activateSquadIfReady(squad.id);
 
           newStudent.matching_status = 'suggested';
           newStudent.joinedSquad = squad.id;
@@ -363,9 +373,13 @@ app.post('/students', registrationLimiter, async (req, res) => {
       }
     }
 
+    if (inviteClient) await inviteClient.query('COMMIT');
+    if (newStudent.joinedSquad) await activateSquadIfReady(newStudent.joinedSquad);
+
     res.status(201).json(newStudent);
 
   } catch (err) {
+    if (inviteClient) await inviteClient.query('ROLLBACK').catch(() => {});
     if (err.code === '23505') {
       // Constraint naming can differ slightly across environments (e.g. an
       // auto-generated `students_phone_key` vs an explicitly named index),
@@ -384,6 +398,8 @@ app.post('/students', registrationLimiter, async (req, res) => {
     }
     console.error(err);
     res.status(500).json({ error: 'Something went wrong saving the student.' });
+  } finally {
+    if (inviteClient) inviteClient.release();
   }
 });
 
@@ -1436,33 +1452,54 @@ app.post('/squads/:squadId/invite', requireAuth, async (req, res) => {
 app.post('/invites/:inviteCode/join', requireAuth, async (req, res) => {
   const inviteCode = req.params.inviteCode;
   const studentId = req.student.studentId;
+  let client;
 
   try {
-    const squadResult = await pool.query('SELECT * FROM squads WHERE invite_code = $1', [inviteCode]);
+    client = await pool.connect();
+    // Lock this squad row for the whole check-and-insert so two concurrent
+    // requests cannot both consume the last invite use.
+    await client.query('BEGIN');
+    const squadResult = await client.query(
+      'SELECT * FROM squads WHERE invite_code = $1 FOR UPDATE',
+      [inviteCode]
+    );
 
     if (squadResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Invalid or expired invite link.' });
     }
 
     const squad = squadResult.rows[0];
 
-    const alreadyInSquad = await pool.query(
+    const alreadyInSquad = await client.query(
       'SELECT id FROM squad_members WHERE student_id = $1',
       [studentId]
     );
     if (alreadyInSquad.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'You are already in a squad.' });
     }
 
-    const membersResult = await pool.query(
+    if (squad.invite_uses >= 2) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This invite link has already been used by 2 people.' });
+    }
+
+    const membersResult = await client.query(
       'SELECT slot FROM squad_members WHERE squad_id = $1 ORDER BY slot',
       [squad.id]
     );
     const takenSlots = membersResult.rows.map(r => r.slot);
 
     if (takenSlots.length >= 6) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'This squad is already full. Invite link has been used up.' });
     }
+
+    await client.query(
+      'UPDATE squads SET invite_uses = invite_uses + 1 WHERE id = $1',
+      [squad.id]
+    );
 
     // Squads now fill up incrementally (no fixed "first 4 via matching,
     // last 2 via invite" split), so an invite can land in any open slot,
@@ -1470,25 +1507,29 @@ app.post('/invites/:inviteCode/join', requireAuth, async (req, res) => {
     let nextSlot = 1;
     while (takenSlots.includes(nextSlot)) nextSlot++;
 
-    const insertResult = await pool.query(
+    const insertResult = await client.query(
       `INSERT INTO squad_members (squad_id, student_id, slot, join_type, status)
        VALUES ($1, $2, $3, 'invite', 'confirmed')
        RETURNING *`,
       [squad.id, studentId, nextSlot]
     );
 
-    await pool.query(
+    await client.query(
       `UPDATE students SET matching_status = 'suggested' WHERE id = $1`,
       [studentId]
     );
 
+    await client.query('COMMIT');
     await activateSquadIfReady(squad.id);
     const finalSquadResult = await pool.query('SELECT * FROM squads WHERE id = $1', [squad.id]);
 
     res.status(201).json({ squad: finalSquadResult.rows[0], member: insertResult.rows[0] });
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error(err);
     res.status(500).json({ error: 'Something went wrong joining the squad.' });
+  } finally {
+    if (client) client.release();
   }
 });
 

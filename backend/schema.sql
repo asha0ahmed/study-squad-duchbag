@@ -96,6 +96,7 @@ CREATE TABLE squads (
   aspirant_type VARCHAR(60) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'suggested',
   invite_code VARCHAR(20) UNIQUE,
+  invite_uses INTEGER NOT NULL DEFAULT 0 CHECK (invite_uses BETWEEN 0 AND 2),
   mentor_id INTEGER REFERENCES mentors(id),
   created_at TIMESTAMP DEFAULT NOW()
 );

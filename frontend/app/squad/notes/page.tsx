@@ -568,8 +568,8 @@ function SquadNotesContent() {
   const currentSenderId = session.role === "student" ? session.student?.id : session.mentor?.id;
 
   return (
-    <main className="flex flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
+    <main className="flex min-h-0 flex-1 flex-col px-4 py-8 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pb-8">
+      <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
         <p className="eyebrow text-cyan">Squad Notes</p>
         <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
           The Ledger
@@ -586,8 +586,7 @@ function SquadNotesContent() {
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="card mt-6 flex-1 overflow-y-auto px-5 py-4"
-          style={{ maxHeight: "55vh", minHeight: "40vh" }}
+          className="card mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4"
         >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
@@ -612,7 +611,7 @@ function SquadNotesContent() {
           )}
         </div>
 
-        <form onSubmit={handleSend} className="mt-4 flex items-center gap-2">
+        <form onSubmit={handleSend} className="mt-4 flex shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap">
           <input
             type="file"
             accept="image/*"
@@ -652,7 +651,7 @@ function SquadNotesContent() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Write a note to your squad…"
-                className="input flex-1"
+                className="input min-w-0 flex-1"
                 disabled={sending}
               />
               <button
