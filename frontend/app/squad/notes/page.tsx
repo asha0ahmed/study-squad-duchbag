@@ -135,6 +135,7 @@ function SquadNotesContent() {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -434,9 +435,11 @@ function SquadNotesContent() {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (access.state !== "ready" || !draft.trim()) return;
+    if (sending || access.state !== "ready" || !draft.trim()) return;
     setError(null);
     setSending(true);
+    // Keep the keyboard open (Messenger-style): hold focus on the typing box.
+    textInputRef.current?.focus();
     try {
       const created = await sendSquadMessage(access.squadId, draft.trim());
       appendOwnMessage(access.squadId, { ...created, sender_name: myDisplayName() });
@@ -445,6 +448,7 @@ function SquadNotesContent() {
       setError(err instanceof ApiError ? err.message : "Couldn't send that message.");
     } finally {
       setSending(false);
+      textInputRef.current?.focus();
     }
   }
 
@@ -672,17 +676,21 @@ function SquadNotesContent() {
               </button>
               {/* 3. Typing box */}
               <input
+                ref={textInputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Write a note…"
                 className="chat-input"
-                disabled={sending}
                 enterKeyHint="send"
+                autoComplete="off"
               />
               {/* 4. Send */}
               <button
                 type="submit"
                 disabled={sending || !draft.trim()}
+                // Stops the tap from stealing focus off the typing box, so the
+                // keyboard stays up after sending (like Messenger/WhatsApp).
+                onMouseDown={(e) => e.preventDefault()}
                 className="chat-send-btn"
                 aria-label="Send message"
                 title="Send message"
