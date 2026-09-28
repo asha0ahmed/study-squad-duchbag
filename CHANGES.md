@@ -1,5 +1,32 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 5 — Squad Notes: composer pushed under the bottom dock (root cause)
+
+### Problem
+The message input, image button, mic and send button were not visible on
+`/squad/notes`; the page scrolled as a whole and the composer sat under the
+fixed bottom dock.
+
+### Root cause
+`<body>` is a flex column with only `min-height` (no definite height) and the
+chat `<main>` also carries Tailwind `flex-1` (`flex: 1 1 0%`). A percentage
+flex-basis against an indefinite container resolves to `content`, and a
+non-`auto` flex-basis overrides `height`. So the `height: calc(100dvh - ...)`
+on `.chat-page` was never applied: `<main>` grew to fit every message, the
+body scrolled instead of the message list, and the composer landed below the
+fold, behind the dock.
+
+### Fix (`frontend/app/globals.css`, `.chat-page` only)
+- `flex: 0 0 auto; min-height: 0;` so the explicit height is authoritative.
+- Height now also subtracts the navbar's 1px border, so the page no longer
+  overflows by 1px.
+- Result: the message list is the only scrolling region and the composer stays
+  visible directly above the dock on mobile and desktop.
+
+### Verified
+`npm install`, `tsc --noEmit` and `next build` pass. No JS/TS, backend, or
+schema changes.
+
 ## Session 4 — Squad Notes chat: cursor pagination + index (7–8 req/s target)
 
 ### Problem

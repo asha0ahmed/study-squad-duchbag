@@ -746,7 +746,16 @@ body.has-bottom-dock {
    underneath the fixed bottom dock. `dvh` follows the visual viewport when
    a mobile keyboard opens. */
 .chat-page {
-  height: calc(100dvh - 4rem - 5.5rem - env(safe-area-inset-bottom));
+  /* ROOT-CAUSE FIX: <body> is a flex column with no definite height, and the
+     page also carries Tailwind's `flex-1` (flex: 1 1 0%). A percentage
+     flex-basis against an indefinite container resolves to `content`, which
+     overrides `height` -- so the page grew to fit every message and the
+     composer was pushed below the fold, under the fixed dock. `flex: none`
+     makes the explicit height below authoritative. */
+  flex: 0 0 auto;
+  min-height: 0;
+  /* navbar (4rem + 1px border) + dock reserve (5.5rem + safe-area) */
+  height: calc(100dvh - 4rem - 1px - 5.5rem - env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
