@@ -568,25 +568,27 @@ function SquadNotesContent() {
   const currentSenderId = session.role === "student" ? session.student?.id : session.mentor?.id;
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col px-4 py-8 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pb-8">
-      <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
-        <p className="eyebrow text-cyan">Squad Notes</p>
-        <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
-          The Ledger
-        </h1>
-        <a
-          href="https://noteviewe.netlify.app"
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex w-fit text-sm font-semibold text-cyan underline decoration-cyan/40 underline-offset-4 transition-colors hover:text-text"
-        >
-          Open Note Viewer
-        </a>
+    <main className="chat-page flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+      <div className="chat-shell mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
+        <div className="chat-header shrink-0">
+          <p className="eyebrow text-cyan">Squad Notes</p>
+          <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
+            The Ledger
+          </h1>
+          <a
+            href="https://noteviewe.netlify.app"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex w-fit text-sm font-semibold text-cyan underline decoration-cyan/40 underline-offset-4 transition-colors hover:text-text"
+          >
+            Open Note Viewer
+          </a>
+        </div>
 
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="card mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4"
+          className="chat-message-pane card mt-4 min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4"
         >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
@@ -611,7 +613,7 @@ function SquadNotesContent() {
           )}
         </div>
 
-        <form onSubmit={handleSend} className="mt-4 flex shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+        <form onSubmit={handleSend} className="chat-composer mt-3 flex shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap">
           <input
             type="file"
             accept="image/*"
@@ -670,7 +672,7 @@ function SquadNotesContent() {
             </>
           )}
         </form>
-        <div className="mt-2">
+        <div className="chat-error mt-2 shrink-0">
           <FormError message={error} />
         </div>
       </div>
