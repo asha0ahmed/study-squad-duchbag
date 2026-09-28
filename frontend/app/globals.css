@@ -865,7 +865,12 @@ body.has-bottom-dock {
 @media (max-width: 639px) {
   .chat-page {
     padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
+    /* Extend the chat block lower so the type row sits just above the dock
+       (~18px gap) instead of ~38px. The extra 0.5rem of height is cancelled
+       by the negative margin so the page still never scrolls. */
+    padding-bottom: 0;
+    height: calc(100dvh - 4rem - 1px - 5.5rem - env(safe-area-inset-bottom) + 0.5rem);
+    margin-bottom: -0.5rem;
   }
 
   .chat-message-pane {

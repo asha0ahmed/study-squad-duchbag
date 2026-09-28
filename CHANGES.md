@@ -12,6 +12,8 @@
 - Placeholder shortened to "Write a note…" so it is not clipped on phones.
 - Chat log fills the space down to the composer and stays scrolled to the
   newest message; log and composer share the same left/right edges.
+- Phones only: chat block extended lower so the type row sits ~18px above the
+  dock (was ~38px), matching the reference screenshot. Page still never scrolls.
 - Verified in headless Chromium against the real built app (mock backend) at
   360x640, 390x780, 412x915, 390x420 (keyboard), 1280x584.
 
