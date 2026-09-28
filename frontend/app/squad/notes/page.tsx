@@ -613,7 +613,7 @@ function SquadNotesContent() {
           )}
         </div>
 
-        <form onSubmit={handleSend} className="chat-composer mt-3 flex shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+        <form onSubmit={handleSend} className="chat-composer mt-3 flex shrink-0 items-center gap-2">
           <input
             type="file"
             accept="image/*"
@@ -621,11 +621,12 @@ function SquadNotesContent() {
             onChange={handleImageSelected}
             className="hidden"
           />
+          {/* 1. Image */}
           <button
             type="button"
             onClick={() => imageInputRef.current?.click()}
             disabled={sending || isRecording}
-            className="btn btn-secondary !px-3"
+            className="chat-icon-btn"
             aria-label="Send an image"
             title="Send an image"
           >
@@ -633,41 +634,60 @@ function SquadNotesContent() {
           </button>
 
           {isRecording ? (
-            <div className="flex flex-1 items-center gap-2 rounded-full border border-border-soft bg-surface-2 px-3 py-2">
-              <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-red-500" aria-hidden="true" />
-              <span className="text-sm text-text-dim">Recording… {formatDuration(recordingSeconds)}</span>
+            <>
+              {/* Recording state: timer pill + cancel + round send */}
+              <div className="chat-recording flex min-w-0 flex-1 items-center gap-2">
+                <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-red-500" aria-hidden="true" />
+                <span className="truncate text-sm text-text-dim">Recording… {formatDuration(recordingSeconds)}</span>
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="ml-auto flex-none text-xs font-semibold text-text-faint underline"
+                >
+                  Cancel
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={cancelRecording}
-                className="ml-auto text-xs font-semibold text-text-faint underline"
+                onClick={stopRecordingAndSend}
+                className="chat-send-btn"
+                aria-label="Send voice message"
+                title="Send voice message"
               >
-                Cancel
+                <UiIcon name="send" className="h-5 w-5" />
               </button>
-              <button type="button" onClick={stopRecordingAndSend} className="btn btn-primary !px-4 !py-1.5 text-xs">
-                Send
-              </button>
-            </div>
+            </>
           ) : (
             <>
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Write a note to your squad…"
-                className="input min-w-0 flex-1"
-                disabled={sending}
-              />
+              {/* 2. Voice message */}
               <button
                 type="button"
                 onClick={startRecording}
                 disabled={sending}
-                className="btn btn-secondary !px-3"
+                className="chat-icon-btn"
                 aria-label="Record a voice message"
                 title="Record a voice message"
               >
                 <UiIcon name="mic" className="h-5 w-5" />
               </button>
-              <button type="submit" disabled={sending || !draft.trim()} className="btn btn-primary !px-5">
-                Send
+              {/* 3. Typing box */}
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Write a note…"
+                className="chat-input"
+                disabled={sending}
+                enterKeyHint="send"
+              />
+              {/* 4. Send */}
+              <button
+                type="submit"
+                disabled={sending || !draft.trim()}
+                className="chat-send-btn"
+                aria-label="Send message"
+                title="Send message"
+              >
+                <UiIcon name="send" className="h-5 w-5" />
               </button>
             </>
           )}

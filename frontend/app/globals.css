@@ -781,7 +781,80 @@ body.has-bottom-dock {
 
 .chat-composer {
   flex: 0 0 auto;
+  flex-wrap: nowrap; /* image · mic · typing box · send always share ONE row */
   padding-bottom: max(0px, env(safe-area-inset-bottom));
+}
+
+/* Round icon buttons (image, mic) */
+.chat-icon-btn,
+.chat-send-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  transition: transform 0.12s ease, box-shadow 0.18s ease, opacity 0.15s ease,
+    background 0.18s ease, border-color 0.18s ease;
+}
+.chat-icon-btn {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+.chat-icon-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: rgba(var(--indigo-rgb), 0.5);
+}
+
+/* Round gradient send button with paper-plane icon */
+.chat-send-btn {
+  color: #fff;
+  background: linear-gradient(135deg, var(--indigo), var(--violet));
+  box-shadow: 0 8px 24px -8px rgba(var(--indigo-rgb), 0.55);
+}
+.chat-send-btn:hover:not(:disabled) {
+  box-shadow: 0 10px 32px -6px rgba(var(--indigo-rgb), 0.7);
+}
+
+.chat-icon-btn:active:not(:disabled),
+.chat-send-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.chat-icon-btn:disabled,
+.chat-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pill-shaped typing box */
+.chat-input,
+.chat-recording {
+  height: 2.75rem;
+  border-radius: 9999px;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+.chat-input {
+  flex: 1 1 0%;
+  min-width: 0;
+  padding: 0 1.1rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.chat-input::placeholder {
+  color: var(--color-text-faint);
+}
+.chat-input:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(var(--indigo-rgb), 0.18);
+}
+.chat-recording {
+  padding: 0 1rem;
 }
 
 .chat-error {
@@ -801,11 +874,6 @@ body.has-bottom-dock {
 
   .chat-composer {
     gap: 0.5rem;
-  }
-
-  .chat-composer .input {
-    min-width: min(100%, 10rem);
-    flex-basis: 8rem;
   }
 }
 

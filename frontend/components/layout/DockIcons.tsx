@@ -129,6 +129,7 @@ export type UiIconName =
   | "paperclip"
   | "radio"
   | "search"
+  | "send"
   | "sparkle"
   | "star"
   | "target"
@@ -158,6 +159,7 @@ export function UiIcon({ name, ...props }: IconProps & { name: UiIconName }) {
     paperclip: <path d="m9.5 12.5 4.75-4.75a2.65 2.65 0 0 1 3.75 3.75l-6.5 6.5a4.25 4.25 0 0 1-6-6l6-6" />,
     radio: <><circle cx="12" cy="12" r="2" /><path d="M7.75 7.75a6 6 0 0 0 0 8.5M16.25 7.75a6 6 0 0 1 0 8.5M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14" /></>,
     search: <><circle cx="10.75" cy="10.75" r="5.75" /><path d="m15 15 4.5 4.5" /></>,
+    send: <><path d="M20.5 3.5 3.5 10.5l6.5 2.5 2.5 6.5z" /><path d="M20.5 3.5 10 13" /></>,
     sparkle: <><path d="m12 3 1.4 5.6L19 10l-5.6 1.4L12 17l-1.4-5.6L5 10l5.6-1.4z" /><path d="m18.5 16 .5 2 .5-2 2-.5-2-.5-.5-2-.5 2-2 .5z" /></>,
     star: <path d="m12 4 2.35 4.9 5.4.65-4 3.65 1.05 5.3L12 15.9l-4.8 2.6 1.05-5.3-4-3.65 5.4-.65z" />,
     target: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></>,

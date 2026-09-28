@@ -1,5 +1,20 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 6 — Squad Notes: composer arrangement + send icon
+
+- New `send` paper-plane icon in `components/layout/DockIcons.tsx`.
+- Composer order is now: image, voice (mic), typing box, round send button --
+  always on ONE row (no wrapping on phones). Recording state keeps the image
+  button, shows a timer pill with Cancel, and a round send button.
+- Round 44px icon buttons, pill-shaped typing box, round gradient send button
+  (disabled/dimmed until text is typed). New classes in `globals.css`:
+  `.chat-icon-btn`, `.chat-send-btn`, `.chat-input`, `.chat-recording`.
+- Placeholder shortened to "Write a note…" so it is not clipped on phones.
+- Chat log fills the space down to the composer and stays scrolled to the
+  newest message; log and composer share the same left/right edges.
+- Verified in headless Chromium against the real built app (mock backend) at
+  360x640, 390x780, 412x915, 390x420 (keyboard), 1280x584.
+
 ## Session 5 — Squad Notes: composer pushed under the bottom dock (root cause)
 
 ### Problem
