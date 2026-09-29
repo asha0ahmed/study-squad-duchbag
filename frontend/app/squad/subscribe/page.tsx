@@ -8,11 +8,12 @@ import {
   getMySquad,
   getSession,
   getLatestPayment,
+  getSubscription,
   needsProfiler,
   StoredSession,
   submitPayment,
 } from "@/lib/api";
-import type { Payment } from "@/lib/types";
+import type { Payment, SubscriptionInfo } from "@/lib/types";
 import { timeLeftLabel } from "@/lib/subscriptionTime";
 import { PaymentForm, PaymentFormInput } from "@/components/squad/PaymentForm";
 
@@ -22,7 +23,7 @@ type Screen =
   // squad -- null if they've never paid (unusual but possible if an
   // admin matched them manually). Used to decide whether to show a renew
   // form inline, and to show a small "renewal pending" note.
-  | { state: "has-squad"; payment: Payment | null }
+  | { state: "has-squad"; payment: Payment | null; subscription: SubscriptionInfo | null }
   | { state: "form" }
   | { state: "pending"; payment: Payment }
   | { state: "rejected"; payment: Payment }
@@ -82,10 +83,65 @@ function AssignmentCountdown({ payment, now }: { payment: Payment; now: number }
   );
 }
 
-/** True once an approved payment is close enough to (or past) its expiry that a renewal form should be offered. Matches the "urgent" cutoff used elsewhere (see lib/subscriptionTime). */
-function needsRenewal(payment: Payment | null): boolean {
-  if (!payment || payment.status !== "approved") return false;
-  return timeLeftLabel(payment.expires_at).tone === "coral";
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString([], { dateStyle: "medium" });
+}
+
+/** Where the student stands right now: free trial, paid, or ended -- with the date it runs to. */
+function SubscriptionSummary({ subscription }: { subscription: SubscriptionInfo | null }) {
+  if (!subscription || subscription.status === "none") {
+    if (subscription?.trial_pending) {
+      return (
+        <div className="mb-6 rounded-2xl border border-cyan/40 bg-cyan/10 px-5 py-4">
+          <p className="eyebrow text-cyan">Free trial</p>
+          <p className="mt-1 text-sm text-text-dim">
+            Your free trial starts as soon as your squad is fully confirmed.
+          </p>
+        </div>
+      );
+    }
+    return null;
+  }
+
+  const time = subscription.expires_at ? timeLeftLabel(subscription.expires_at) : null;
+  const tone =
+    subscription.status === "expired"
+      ? { box: "border-coral/40 bg-coral/10", eyebrow: "text-coral" }
+      : time?.tone === "coral"
+        ? { box: "border-coral/40 bg-coral/10", eyebrow: "text-coral" }
+        : subscription.status === "trial"
+          ? { box: "border-cyan/40 bg-cyan/10", eyebrow: "text-cyan" }
+          : { box: "border-emerald/40 bg-emerald/10", eyebrow: "text-emerald" };
+
+  const title =
+    subscription.status === "trial"
+      ? "Free trial"
+      : subscription.status === "active"
+        ? "Active subscription"
+        : "Subscription ended";
+
+  return (
+    <div className={"mb-6 rounded-2xl border px-5 py-4 " + tone.box}>
+      <p className={"eyebrow " + tone.eyebrow}>{title}</p>
+      {subscription.expires_at && (
+        <p className="mt-1.5 text-sm text-text">
+          {subscription.status === "expired" ? "Ended" : "Runs until"}{" "}
+          <span className="font-semibold">{formatDate(subscription.expires_at)}</span>
+          {time && <span className="text-text-dim"> · {time.label}</span>}
+        </p>
+      )}
+      {subscription.status === "trial" && (
+        <p className="mt-1 text-xs text-text-dim">
+          Buy a plan any time — it&apos;s added after your free trial, so you lose nothing.
+        </p>
+      )}
+      {subscription.status === "expired" && (
+        <p className="mt-1 text-xs text-text-dim">
+          Buy a plan below to get your squad, notes and tasks back.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function SubscribePage() {
@@ -125,10 +181,17 @@ export default function SubscribePage() {
       hasSquad = false;
     }
 
+    let subscription: SubscriptionInfo | null = null;
+    try {
+      subscription = await getSubscription(session.student.id);
+    } catch {
+      // Non-fatal -- the page falls back to the latest payment below.
+    }
+
     try {
       const payment = await getLatestPayment(session.student.id);
       if (hasSquad) {
-        setScreen({ state: "has-squad", payment });
+        setScreen({ state: "has-squad", payment, subscription });
       } else if (payment.status === "pending") {
         setScreen({ state: "pending", payment });
       } else if (payment.status === "rejected") {
@@ -138,7 +201,7 @@ export default function SubscribePage() {
       }
     } catch {
       // 404 means no payment submitted yet.
-      if (hasSquad) setScreen({ state: "has-squad", payment: null });
+      if (hasSquad) setScreen({ state: "has-squad", payment: null, subscription });
       else setScreen({ state: "form" });
     }
   }, [session]);
@@ -193,71 +256,62 @@ export default function SubscribePage() {
   }
 
   if (screen.state === "has-squad") {
-    const { payment } = screen;
+    const { payment, subscription } = screen;
+    const pending = subscription ? subscription.has_pending_payment : payment?.status === "pending";
+    const expired = subscription?.status === "expired";
+    const subscribed = subscription?.status === "active" || subscription?.status === "trial";
 
-    if (needsRenewal(payment)) {
-      const time = timeLeftLabel(payment!.expires_at);
-      return (
-        <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-xl">
-            <div className="mb-8 rounded-2xl border border-coral/40 bg-coral/10 px-5 py-4">
-              <p className="text-sm font-semibold text-coral">
-                {time.label === "No expiry on file"
-                  ? "We couldn't find an expiry date on your subscription"
-                  : `Your subscription ${time.label.toLowerCase()}`}
-              </p>
-              <p className="mt-1 text-sm text-text-dim">
-                Renew below to keep your squad access uninterrupted -- nothing about your squad
-                changes while this is pending review.
-              </p>
-            </div>
-            <PaymentForm
-              onSubmit={handleSubmit}
-              submitting={submitting}
-              error={error}
-              setError={setError}
-              heading="Renew your subscription"
-              subheading="Pick a plan, send the payment, and tell us the details below."
-              submitLabel="Submit Renewal"
-            />
-          </div>
-        </main>
-      );
-    }
-
-    if (payment && payment.status === "pending") {
-      return (
-        <main className="flex flex-1 items-center justify-center px-6 py-16">
-          <div className="card w-full max-w-md px-6 py-8 text-center">
-            <p className="eyebrow text-cyan">Renewal Submitted</p>
-            <h1 className="mt-2 font-display text-3xl font-extrabold text-text">
-              We&apos;ve got your payment
-            </h1>
-            <p className="mt-3 text-sm text-text-dim">
-              Trx ID <span className="font-semibold text-text">{payment.trx_id}</span> is being
-              reviewed. Your squad access continues in the meantime.
-            </p>
-            <Link href="/squad" className="btn btn-primary mt-6 inline-flex">
-              View Your Squad
-            </Link>
-          </div>
-        </main>
-      );
-    }
-
-    const time = payment?.status === "approved" ? timeLeftLabel(payment.expires_at) : null;
     return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
-        <div className="card w-full max-w-md px-6 py-8 text-center">
-          <p className="eyebrow text-emerald">You&apos;re already set</p>
-          {time && (
-            <p className="mt-2 text-xs text-text-faint">
-              Subscription: <span className="text-text-dim">{time.label}</span>
-            </p>
+      <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-xl">
+          <SubscriptionSummary subscription={subscription} />
+
+          {pending ? (
+            <div className="card w-full px-6 py-8 text-center">
+              <p className="eyebrow text-cyan">Payment Submitted</p>
+              <h1 className="mt-2 font-display text-3xl font-extrabold text-text">
+                We&apos;ve got your payment
+              </h1>
+              <p className="mt-3 text-sm text-text-dim">
+                {payment?.trx_id ? (
+                  <>
+                    Trx ID <span className="font-semibold text-text">{payment.trx_id}</span> is being
+                    reviewed.
+                  </>
+                ) : (
+                  "Your payment is being reviewed."
+                )}{" "}
+                The time is added to your subscription as soon as it&apos;s approved.
+              </p>
+              <Link href="/squad" className="btn btn-primary mt-6 inline-flex">
+                View Your Squad
+              </Link>
+            </div>
+          ) : (
+            <>
+              {payment?.status === "rejected" && (
+                <div className="mb-6 rounded-2xl border border-coral/40 bg-coral/10 px-5 py-4">
+                  <p className="text-sm font-semibold text-coral">
+                    Your last payment couldn&apos;t be verified
+                  </p>
+                  <p className="mt-1 text-sm text-text-dim">Double-check the details below and submit again.</p>
+                </div>
+              )}
+              <PaymentForm
+                onSubmit={handleSubmit}
+                submitting={submitting}
+                error={error}
+                setError={setError}
+                heading={expired ? "Renew your subscription" : subscribed ? "Extend your subscription" : "Subscribe"}
+                subheading={
+                  subscribed
+                    ? "Buy again any time — the new period is added on top of the time you already have."
+                    : "Pick a plan, send the payment, and tell us the details below."
+                }
+                submitLabel={expired ? "Submit Renewal" : subscribed ? "Submit Extension" : "Submit Payment"}
+              />
+            </>
           )}
-          <Link href="/squad" className="btn btn-primary mt-4 inline-flex">
-            View Your Squad
-          </Link>
         </div>
       </main>
     );

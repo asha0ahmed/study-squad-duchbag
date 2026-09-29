@@ -17,6 +17,12 @@ CREATE TABLE students (
   -- access via requireAuth. See PATCH /admin/students/:id/remove.
   status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
   removed_at TIMESTAMP,
+  -- 7-day free trial for INVITED students only. Set (once) when their
+  -- squad becomes fully confirmed; NULL for everyone else and for invited
+  -- students whose squad is not fully confirmed yet.
+  -- See migrations/015_add_invite_free_trial.sql.
+  trial_started_at TIMESTAMP,
+  trial_ends_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

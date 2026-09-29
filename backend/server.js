@@ -137,6 +137,14 @@ io.on('connection', (socket) => {
 
       if (!authorized) return ack({ error: 'You are not authorized to join this squad.' });
 
+      // Expired trial / lapsed subscription: no live chat feed either.
+      if (socket.decoded.studentId) {
+        const subscription = await getSubscriptionState(socket.decoded.studentId);
+        if (subscription && subscription.status === 'expired') {
+          return ack({ error: 'Your subscription has ended. Renew to keep using your squad.', subscriptionExpired: true });
+        }
+      }
+
       // A tab only ever needs one squad's messages at a time, so leaving
       // any other room first keeps a long-lived connection (e.g. a tab
       // left open while the user browses to a different squad) from
@@ -245,15 +253,142 @@ async function expireStaleSquads() {
   return staleSquadIds.length;
 }
 
+// ---- Invite free trial + subscription state ----
+//
+// Invited students (squad_members.join_type = 'invite') get a free trial
+// that starts the moment their squad becomes fully confirmed
+// (status = 'locked'). After it ends they are treated exactly like an
+// expired paid user. The trial is granted once per student, ever.
+const INVITE_TRIAL_DAYS = process.env.INVITE_TRIAL_DAYS
+  ? parseFloat(process.env.INVITE_TRIAL_DAYS)
+  : 7;
+
+// Starts the free trial for every invited member of a (fully confirmed)
+// squad who has not had one yet. Idempotent -- trial_started_at IS NULL
+// guarantees a student can never be granted a second trial.
+async function startInviteTrials(squadId) {
+  await pool.query(
+    `UPDATE students
+     SET trial_started_at = NOW(),
+         trial_ends_at = NOW() + ($2::numeric * INTERVAL '1 day')
+     WHERE trial_started_at IS NULL
+       AND id IN (
+         SELECT student_id FROM squad_members
+         WHERE squad_id = $1 AND join_type = 'invite'
+       )`,
+    [squadId, INVITE_TRIAL_DAYS]
+  );
+}
+
+// One place that answers "what is this student's subscription right now?"
+//   status: 'active'  -> paid and not expired
+//           'trial'   -> inside the invited-student free trial
+//           'expired' -> had a trial or paid plan, and it has ended
+//           'none'    -> never paid and no trial (yet)
+// expires_at is the end of ALL time the student has (trial and paid
+// periods are stacked, see the approve endpoint), so it is the single
+// date the student's access runs to.
+async function getSubscriptionState(studentId, db = pool) {
+  const result = await db.query(
+    `SELECT s.trial_started_at, s.trial_ends_at,
+            (SELECT MAX(expires_at) FROM payments
+              WHERE student_id = s.id AND status = 'approved') AS paid_ends_at,
+            EXISTS(SELECT 1 FROM payments
+              WHERE student_id = s.id AND status = 'approved' AND expires_at IS NULL) AS paid_open_ended,
+            (SELECT status FROM payments WHERE student_id = s.id
+              ORDER BY created_at DESC, id DESC LIMIT 1) AS last_payment_status,
+            EXISTS(SELECT 1 FROM payments
+              WHERE student_id = s.id AND status = 'pending') AS has_pending_payment,
+            EXISTS(SELECT 1 FROM squad_members
+              WHERE student_id = s.id AND join_type = 'invite') AS joined_by_invite
+     FROM students s WHERE s.id = $1`,
+    [studentId]
+  );
+
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+
+  const now = Date.now();
+  const trialEnd = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : null;
+  const paidEnd = row.paid_ends_at ? new Date(row.paid_ends_at).getTime() : null;
+  const end = Math.max(trialEnd ?? -Infinity, paidEnd ?? -Infinity);
+
+  let status;
+  let source = null;
+  if (row.paid_open_ended) {
+    status = 'active';
+    source = 'paid';
+  } else if (end === -Infinity) {
+    status = 'none';
+  } else if (paidEnd !== null && paidEnd > now) {
+    status = 'active';
+    source = 'paid';
+  } else if (trialEnd !== null && trialEnd > now) {
+    status = 'trial';
+    source = 'trial';
+  } else {
+    status = 'expired';
+  }
+
+  const expiresAt = end === -Infinity || row.paid_open_ended ? null : new Date(end).toISOString();
+  const daysLeft = expiresAt ? Math.ceil((end - now) / (1000 * 60 * 60 * 24)) : null;
+
+  return {
+    status,
+    source,
+    expires_at: expiresAt,
+    days_left: daysLeft,
+    trial_started_at: row.trial_started_at,
+    trial_ends_at: row.trial_ends_at,
+    paid_ends_at: row.paid_ends_at,
+    has_pending_payment: row.has_pending_payment,
+    last_payment_status: row.last_payment_status,
+    // Invited, but their squad is not fully confirmed yet, so the free
+    // trial has not started.
+    trial_pending: row.joined_by_invite && !row.trial_started_at && status === 'none',
+  };
+}
+
+// Blocks squad features (Squad Notes, tasks) for a student whose trial or
+// paid subscription has ended. Mentors pass straight through. Students
+// with no subscription history at all ('none') are not blocked here --
+// matching already requires a payment, and an invited student whose squad
+// is not fully confirmed yet is still waiting for their trial to start.
+async function requireActiveSubscription(req, res, next) {
+  if (!req.student) return next();
+  try {
+    const state = await getSubscriptionState(req.student.studentId);
+    if (state && state.status === 'expired') {
+      return res.status(402).json({
+        error: 'Your subscription has ended. Renew to keep using your squad.',
+        subscriptionExpired: true,
+      });
+    }
+    next();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong checking your subscription.' });
+  }
+}
+
 // Replaces the old "4 manual confirms -> lock" flow. There is no confirm
 // step anymore -- every member is inserted already 'confirmed'. A squad
 // becomes active (status='locked', Squad Notes unlocks) automatically the
 // moment its member count reaches 4, whether that 4th member arrived via
 // matching or an invite link. Safe to call any time; no-ops if already
 // active or still under 4.
+//
+// Becoming fully confirmed is also what starts the free trial of every
+// invited member (see startInviteTrials). It is also called for a squad
+// that is already locked, so an invitee who joins a locked squad later
+// still gets their trial started.
 async function activateSquadIfReady(squadId) {
   const squadResult = await pool.query('SELECT status FROM squads WHERE id = $1', [squadId]);
-  if (squadResult.rows.length === 0 || squadResult.rows[0].status === 'locked') {
+  if (squadResult.rows.length === 0) {
+    return false;
+  }
+  if (squadResult.rows[0].status === 'locked') {
+    await startInviteTrials(squadId);
     return false;
   }
 
@@ -273,6 +408,7 @@ async function activateSquadIfReady(squadId) {
      WHERE id IN (SELECT student_id FROM squad_members WHERE squad_id = $1)`,
     [squadId]
   );
+  await startInviteTrials(squadId);
   return true;
 }
 
@@ -736,6 +872,28 @@ app.get('/students/:id/payments/latest', requireAuth, async (req, res) => {
   }
 });
 
+// The student's current subscription at a glance -- free trial, paid, or
+// expired -- with the one date their access runs to. Backs the Subscribe
+// page and the More menu badge.
+app.get('/students/:id/subscription', requireAuth, async (req, res) => {
+  const studentId = parseInt(req.params.id);
+
+  if (studentId !== req.student.studentId) {
+    return res.status(403).json({ error: 'You can only view your own subscription.' });
+  }
+
+  try {
+    const state = await getSubscriptionState(studentId);
+    if (!state) {
+      return res.status(404).json({ error: 'Student not found.' });
+    }
+    res.json(state);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading your subscription.' });
+  }
+});
+
 app.get('/admin/payments', adminLimiter, async (req, res) => {
   const adminSecret = req.headers['x-admin-secret'];
   if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
@@ -775,15 +933,27 @@ app.patch('/admin/payments/:paymentId/approve', adminLimiter, async (req, res) =
   }
 
   try {
-    // expires_at = the moment of approval + the plan's own duration (1 or
-    // 6 months) -- this is what actually makes the subscription end.
+    // expires_at = the START of the new period + the plan's own duration
+    // (1 or 6 months). The new period starts where the student's existing
+    // time ends, so buying again while still subscribed EXTENDS the
+    // subscription instead of overwriting it. The start is the latest of:
+    //   - now (an already-lapsed student starts fresh from today)
+    //   - the end of any earlier approved payment
+    //   - the end of the invited-student free trial, if they have one
+    //     (only invited students ever have trial_ends_at)
     // Read off the row's own `plan` column via CASE rather than trusting
     // anything from the request body.
     const result = await pool.query(
-      `UPDATE payments SET status = 'approved', reviewed_at = NOW(),
-              expires_at = NOW() + (CASE plan WHEN '1_month' THEN INTERVAL '1 month' ELSE INTERVAL '6 months' END)
-       WHERE id = $1 AND status = 'pending'
-       RETURNING *`,
+      `UPDATE payments p SET status = 'approved', reviewed_at = NOW(),
+              expires_at = GREATEST(
+                NOW(),
+                COALESCE(s.trial_ends_at, NOW()),
+                COALESCE((SELECT MAX(prev.expires_at) FROM payments prev
+                          WHERE prev.student_id = p.student_id AND prev.status = 'approved'), NOW())
+              ) + (CASE p.plan WHEN '1_month' THEN INTERVAL '1 month' ELSE INTERVAL '6 months' END)
+       FROM students s
+       WHERE s.id = p.student_id AND p.id = $1 AND p.status = 'pending'
+       RETURNING p.*`,
       [req.params.paymentId]
     );
 
@@ -1009,23 +1179,34 @@ app.get('/admin/subscriptions', adminLimiter, async (req, res) => {
   const filter = req.query.filter; // optional: 'expired'
 
   try {
-    // DISTINCT ON picks each student's single most recent approved
-    // payment; ordering that group by created_at DESC keeps the latest
-    // one, and the outer ORDER BY then sorts everyone by how much time
-    // (if any) they have left.
+    // One row per student who has any subscription time: their end date is
+    // the latest of their paid periods and their invite free trial (paid
+    // periods already stack on top of the trial, so this is the date their
+    // access actually runs to). Students who are only on the free trial
+    // show up with plan 'free_trial' and no payment.
     const result = await pool.query(
       `SELECT * FROM (
-         SELECT DISTINCT ON (p.student_id)
-                p.id AS payment_id, p.plan, p.amount, p.expires_at, p.reviewed_at,
-                s.id AS student_id, s.name AS student_name, s.email AS student_email,
-                s.status AS student_status
-         FROM payments p
-         JOIN students s ON s.id = p.student_id
-         WHERE p.status = 'approved'
-         ORDER BY p.student_id, p.created_at DESC
-       ) latest
-       ${filter === 'expired' ? "WHERE latest.expires_at <= NOW()" : ''}
-       ORDER BY latest.expires_at ASC NULLS LAST`
+         SELECT s.id AS student_id, s.name AS student_name, s.email AS student_email,
+                s.status AS student_status,
+                lp.payment_id, COALESCE(lp.plan, 'free_trial') AS plan,
+                COALESCE(lp.amount, 0) AS amount, lp.reviewed_at,
+                s.trial_ends_at,
+                CASE
+                  WHEN lp.expires_at IS NULL AND s.trial_ends_at IS NULL THEN NULL
+                  ELSE GREATEST(COALESCE(lp.expires_at, s.trial_ends_at), COALESCE(s.trial_ends_at, lp.expires_at))
+                END AS expires_at
+         FROM students s
+         LEFT JOIN (
+           SELECT DISTINCT ON (student_id)
+                  student_id, id AS payment_id, plan, amount, expires_at, reviewed_at
+           FROM payments
+           WHERE status = 'approved'
+           ORDER BY student_id, created_at DESC
+         ) lp ON lp.student_id = s.id
+         WHERE lp.payment_id IS NOT NULL OR s.trial_ends_at IS NOT NULL
+       ) subs
+       ${filter === 'expired' ? "WHERE subs.expires_at <= NOW()" : ''}
+       ORDER BY subs.expires_at ASC NULLS LAST`
     );
 
     res.json(result.rows);
@@ -1254,18 +1435,13 @@ app.post('/students/:id/match', requireAuth, matchingLimiter, async (req, res) =
     // Mentor-fee subscription gate: matching requires an admin-approved
     // payment on file that hasn't expired yet. See POST
     // /students/:id/payments and the /admin/payments review endpoints.
-    const paymentCheck = await pool.query(
-      `SELECT id, expires_at FROM payments WHERE student_id = $1 AND status = 'approved'
-       ORDER BY created_at DESC LIMIT 1`,
-      [studentId]
-    );
-    const activePayment = paymentCheck.rows[0];
-    if (!activePayment) {
+    const subscription = await getSubscriptionState(studentId);
+    if (!subscription || subscription.status === 'none') {
       return res.status(402).json({
         error: 'A confirmed mentor-fee payment is required before matching. Submit a payment and wait for admin approval.',
       });
     }
-    if (activePayment.expires_at && new Date(activePayment.expires_at) <= new Date()) {
+    if (subscription.status === 'expired') {
       return res.status(402).json({
         error: 'Your mentor-fee subscription has expired. Submit a new payment and wait for admin approval.',
         subscriptionExpired: true,
@@ -1832,7 +2008,7 @@ app.patch('/squads/:squadId/reassign-mentor', async (req, res) => {
 });
 
 
-app.post('/squads/:squadId/messages', requireAuth, messageLimiter, singleChatAttachmentUpload('file'), async (req, res) => {
+app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, messageLimiter, singleChatAttachmentUpload('file'), async (req, res) => {
   const squadId = parseInt(req.params.squadId);
   const { message, duration } = req.body;
 
@@ -1989,7 +2165,7 @@ const SQUAD_MESSAGE_COLUMNS = `
          WHEN sm.sender_type = 'mentor' THEN (SELECT name FROM mentors WHERE id = sm.sender_id)
        END AS sender_name`;
 
-app.get('/squads/:squadId/messages', requireAuth, async (req, res) => {
+app.get('/squads/:squadId/messages', requireAuth, requireActiveSubscription, async (req, res) => {
   const squadId = parseInt(req.params.squadId);
 
   const parsedLimit = parseInt(req.query.limit, 10);
@@ -2458,7 +2634,7 @@ app.get('/mentors/tasks', requireAuth, async (req, res) => {
 // Student's "Today's Given Tasks" — every task assigned to their squad,
 // with their own submission (if any) attached so the UI can show
 // submitted/not-submitted state without a second round trip.
-app.get('/students/:id/tasks', requireAuth, async (req, res) => {
+app.get('/students/:id/tasks', requireAuth, requireActiveSubscription, async (req, res) => {
   const studentId = parseInt(req.params.id, 10);
   if (studentId !== req.student?.studentId) {
     return res.status(403).json({ error: 'You can only view your own tasks.' });
@@ -2501,7 +2677,7 @@ app.get('/students/:id/tasks', requireAuth, async (req, res) => {
 });
 
 // Student uploads/replaces their answer for one task.
-app.post('/tasks/:taskId/submit', requireAuth, uploadLimiter, singleFileUpload('file'), async (req, res) => {
+app.post('/tasks/:taskId/submit', requireAuth, requireActiveSubscription, uploadLimiter, singleFileUpload('file'), async (req, res) => {
   const studentId = req.student?.studentId;
   if (!studentId) {
     return res.status(403).json({ error: 'Only students can submit task answers.' });

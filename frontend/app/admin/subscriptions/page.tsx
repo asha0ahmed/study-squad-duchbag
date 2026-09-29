@@ -89,7 +89,7 @@ export default function AdminSubscriptionsPage() {
             Subscriptions
           </h1>
           <p className="mt-2 text-sm text-text-dim">
-            Every student with an approved mentor-fee payment, soonest-to-expire first. Nothing here is
+            Every student with an approved mentor-fee payment or an invite free trial, soonest-to-expire first. Paid time stacks on top of any trial, so the end date is when their access really stops. Nothing here is
             removed automatically -- expiring or expired just means it&apos;s ready for you to review.
           </p>
         </div>
@@ -127,7 +127,7 @@ export default function AdminSubscriptionsPage() {
           <div className="card mt-8 flex flex-col items-center gap-2 px-6 py-12 text-center">
             <UiIcon name="inbox" className="h-7 w-7 text-text-faint" />
             <p className="text-sm text-text-dim">
-              {showExpiredOnly ? "No expired subscriptions." : "No approved subscriptions yet."}
+              {showExpiredOnly ? "No expired subscriptions." : "No subscriptions or free trials yet."}
             </p>
           </div>
         ) : (
@@ -147,7 +147,9 @@ export default function AdminSubscriptionsPage() {
                     </div>
                     <span className="text-xs text-text-faint">{row.student_email}</span>
                     <div className="mt-1 text-sm text-text-dim">
-                      {row.plan === "1_month" ? "1 Month" : "6 Months"} plan · ৳{row.amount}
+                      {row.plan === "free_trial"
+                        ? "Free trial (invited)"
+                        : `${row.plan === "1_month" ? "1 Month" : "6 Months"} plan · ৳${row.amount}`}
                       {row.expires_at && <> · ends {formatDate(row.expires_at)}</>}
                     </div>
                   </div>

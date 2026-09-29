@@ -1,5 +1,61 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 7 — 7-day free trial for invited students + stackable renewals
+
+### What changed
+- **Invited students no longer get free access forever.** An invited student
+  (`squad_members.join_type = 'invite'`) gets a **7-day free trial that starts
+  the moment their squad becomes fully confirmed** (`status = 'locked'`, i.e.
+  4 members). One trial per student, ever (`students.trial_started_at IS NULL`
+  guard). Length is `INVITE_TRIAL_DAYS` in `.env` (default 7).
+- **After the trial they are treated as an expired paid user**: matching is
+  refused with `402 subscriptionExpired`, and Squad Notes (REST + live socket)
+  and Tasks (view / submit) return `402 subscriptionExpired`. The app sends the
+  student to **More -> Subscribe** to buy a plan. Mentors are never affected.
+- **Buying again while subscribed extends the subscription.** The new period
+  starts where the student's existing time ends (latest of: now, earlier
+  approved payments' end, and — invited students only — the end of the free
+  trial). So 10 days left + 1 month = 10 days + 1 month. A lapsed student
+  starts fresh from the approval date. Time is still added only when the admin
+  approves the payment.
+- **More -> Subscribe** now shows plan state (Free trial · Nd left / Active · Nd
+  left / Expired — renew / Pending review) and the Subscribe page always offers
+  "Extend / Renew" with the current end date. Squad page banner updated too.
+- **Admin -> Subscriptions** lists trial-only students as "Free trial (invited)"
+  and shows the real end date (trial + paid, stacked).
+
+### Files
+- `backend/migrations/015_add_invite_free_trial.sql` (new) + `schema.sql`:
+  `students.trial_started_at`, `students.trial_ends_at`. **Existing invited
+  students are backfilled from their original join date** (later of their join
+  and when their squad reached 4 members) + 7 days — many will start out
+  expired, as requested.
+- `backend/server.js`: `startInviteTrials`, `getSubscriptionState`,
+  `requireActiveSubscription`, `GET /students/:id/subscription`, stacking in
+  `PATCH /admin/payments/:id/approve`, match gate, socket `join_squad` gate,
+  `/admin/subscriptions`.
+- Frontend: `lib/api.ts`, `lib/types.ts`, `BottomNav.tsx`,
+  `app/squad/subscribe/page.tsx`, `SubscriptionStatus.tsx`,
+  `app/admin/subscriptions/page.tsx`.
+
+### Behaviour note
+Squad Notes / Tasks are now blocked for ANY student whose subscription has
+ended (paid or trial), not just invited ones. Previously an expired paid
+student kept access until an admin removed them.
+
+### Verified
+Against a real PostgreSQL 16: trial starts only when the 4th member joins;
+non-invited members get none; trial = exactly 7 days; buying 1 month then 6
+months while active stacks after the previous end; expired -> 402 on messages,
+renew after lapse starts from now and restores access; admin list includes
+trial-only students; migration backfill uses the original join date and is
+re-runnable. Frontend: `tsc --noEmit`, `eslint`, `next build` clean.
+Not tested: real Cloudinary uploads / browser click-through.
+
+**Action required:** run
+`psql -U postgres -d studysquad -f backend/migrations/015_add_invite_free_trial.sql`
+on your local DB and the live Neon DB, then restart the backend.
+
 ## Session 6 — Squad Notes: composer arrangement + send icon
 
 - New `send` paper-plane icon in `components/layout/DockIcons.tsx`.

@@ -26,6 +26,7 @@ import type {
   MentorSquad,
   MentorTask,
   Payment,
+  SubscriptionInfo,
   PaymentMethod,
   PaymentPlan,
   SavedStudentSubject,
@@ -64,11 +65,28 @@ export interface StoredSession {
 /** Thrown for any non-2xx response. Carries the backend's `error` message. */
 export class ApiError extends Error {
   status: number;
+  /** True when the backend rejected the request because the trial / subscription has ended. */
+  subscriptionExpired: boolean;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, subscriptionExpired = false) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.subscriptionExpired = subscriptionExpired;
+  }
+}
+
+// Pages that only make sense with a live subscription. When the backend
+// says the trial / subscription has ended, send the student straight to
+// the Subscribe page (More -> Subscribe) to buy a plan.
+const SUBSCRIPTION_GATED_PATHS = ["/tasks", "/squad/notes"];
+
+function redirectIfSubscriptionEnded() {
+  if (typeof window === "undefined") return;
+  if (SUBSCRIPTION_GATED_PATHS.includes(window.location.pathname)) {
+    // Plain (non-React) module, so a hard navigation is the right tool here.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/squad/subscribe");
   }
 }
 
@@ -223,7 +241,9 @@ async function requestForm<T>(
 
   if (!response.ok) {
     const body = data as ApiErrorBody | null;
-    throw new ApiError(response.status, body?.error ?? "Something went wrong.");
+    const subscriptionExpired = response.status === 402 && body?.subscriptionExpired === true;
+    if (subscriptionExpired) redirectIfSubscriptionEnded();
+    throw new ApiError(response.status, body?.error ?? "Something went wrong.", subscriptionExpired);
   }
 
   return data as T;
@@ -273,7 +293,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!response.ok) {
     const body = data as ApiErrorBody | null;
-    throw new ApiError(response.status, body?.error ?? "Something went wrong.");
+    const subscriptionExpired = response.status === 402 && body?.subscriptionExpired === true;
+    if (subscriptionExpired) redirectIfSubscriptionEnded();
+    throw new ApiError(response.status, body?.error ?? "Something went wrong.", subscriptionExpired);
   }
 
   return data as T;
@@ -409,6 +431,10 @@ export function submitPayment(studentId: number, input: SubmitPaymentInput) {
     method: "POST",
     body: input,
   });
+}
+
+export function getSubscription(studentId: number) {
+  return request<SubscriptionInfo>(`/students/${studentId}/subscription`);
 }
 
 export function getLatestPayment(studentId: number) {

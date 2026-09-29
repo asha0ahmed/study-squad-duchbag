@@ -37,6 +37,9 @@ psql -U postgres -d studysquad -f schema.sql
 > For the invite-link usage limit, also run:
 > `psql -U postgres -d studysquad -f migrations/014_limit_invite_link_uses.sql`
 
+> For the invited-student 7-day free trial, also run:
+> `psql -U postgres -d studysquad -f migrations/015_add_invite_free_trial.sql`
+
 Start the API (listens on **port 3000**):
 
 ```bash

@@ -215,10 +215,30 @@ export interface AdminPayment extends Payment {
 /** A student's account state -- 'removed' blocks login and every authenticated request. */
 export type StudentAccountStatus = "active" | "removed";
 
-/** Row from GET /admin/subscriptions -- one per student's latest approved payment. */
+/** A student's current subscription -- from GET /students/:id/subscription. */
+export type SubscriptionStatusValue = "active" | "trial" | "expired" | "none";
+
+export interface SubscriptionInfo {
+  status: SubscriptionStatusValue;
+  /** 'trial' = invited-student free trial, 'paid' = bought a plan, null = none. */
+  source: "trial" | "paid" | null;
+  /** The one date all of the student's time (trial + paid, stacked) runs to. Null if none / open-ended. */
+  expires_at: string | null;
+  days_left: number | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  paid_ends_at: string | null;
+  has_pending_payment: boolean;
+  last_payment_status: PaymentStatus | null;
+  /** Invited, but the squad is not fully confirmed yet, so the free trial has not started. */
+  trial_pending: boolean;
+}
+
+/** Row from GET /admin/subscriptions -- one per student with any subscription time (paid or free trial). */
 export interface AdminSubscriptionRecord {
-  payment_id: number;
-  plan: PaymentPlan;
+  /** Null for a student who is only on the invite free trial. */
+  payment_id: number | null;
+  plan: PaymentPlan | "free_trial";
   amount: number;
   expires_at: string | null;
   reviewed_at: string | null;
@@ -416,4 +436,5 @@ export interface TaskSubmissionsResponse {
 /** Shape of every error response body from this backend: { error: string } */
 export interface ApiErrorBody {
   error: string;
+  subscriptionExpired?: boolean;
 }

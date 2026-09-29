@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  getLatestPayment,
   getMySquad,
+  getSubscription,
   getSession,
   logout,
   needsProfiler,
   StoredSession,
 } from "@/lib/api";
-import type { Payment, StudentSquadView } from "@/lib/types";
+import type { StudentSquadView, SubscriptionInfo } from "@/lib/types";
 import {
   CloseIcon,
   DashboardIcon,
@@ -33,12 +33,26 @@ function initials(name: string) {
     .join("");
 }
 
-function paymentBadge(payment: Payment | null | undefined): { label: string; tone: string } | null {
-  if (payment === undefined) return null;
-  if (payment === null) return { label: "Not subscribed", tone: "text-text-faint" };
-  if (payment.status === "approved") return { label: "Active", tone: "text-emerald" };
-  if (payment.status === "pending") return { label: "Pending review", tone: "text-cyan" };
-  return { label: "Rejected — resubmit", tone: "text-coral" };
+function subscriptionBadge(sub: SubscriptionInfo | null | undefined): { label: string; tone: string } | null {
+  if (sub === undefined) return null;
+  if (sub === null) return { label: "Not subscribed", tone: "text-text-faint" };
+  const left = sub.days_left !== null && sub.days_left >= 0 ? `${sub.days_left}d left` : null;
+  if (sub.status === "trial") {
+    return { label: left ? `Free trial · ${left}` : "Free trial", tone: "text-cyan" };
+  }
+  if (sub.status === "active") {
+    return { label: left ? `Active · ${left}` : "Active", tone: "text-emerald" };
+  }
+  if (sub.status === "expired") {
+    return {
+      label: sub.has_pending_payment ? "Expired · pending review" : "Expired — renew",
+      tone: "text-coral",
+    };
+  }
+  if (sub.has_pending_payment) return { label: "Pending review", tone: "text-cyan" };
+  if (sub.trial_pending) return { label: "Trial starts with squad", tone: "text-text-dim" };
+  if (sub.last_payment_status === "rejected") return { label: "Rejected — resubmit", tone: "text-coral" };
+  return { label: "Not subscribed", tone: "text-text-faint" };
 }
 
 type PrimaryItem = {
@@ -68,7 +82,7 @@ export function BottomNav() {
   // lazily, only for a logged-in student, only once per session, and only
   // once the More sheet is actually opened.
   const [studentSquad, setStudentSquad] = useState<StudentSquadView | null | undefined>(undefined);
-  const [payment, setPayment] = useState<Payment | null | undefined>(undefined);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null | undefined>(undefined);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of an external system (localStorage) on route change
@@ -95,8 +109,18 @@ export function BottomNav() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resets local UI state when the identity of the logged-in student changes, not a synchronous render-time write
     setStudentSquad(undefined);
-    setPayment(undefined);
+    setSubscription(undefined);
   }, [studentId]);
+
+  // Re-fetch the squad + subscription each time the sheet is opened, so the
+  // Subscribe badge (trial / active / days left) is never stale after the
+  // student renews or their time runs out.
+  useEffect(() => {
+    if (moreOpen) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears cached sheet data on close so the next open fetches fresh
+    setStudentSquad(undefined);
+    setSubscription(undefined);
+  }, [moreOpen]);
 
   useEffect(() => {
     document.body.style.overflow = moreOpen ? "hidden" : "";
@@ -123,9 +147,9 @@ export function BottomNav() {
 
     let cancelled = false;
     (async () => {
-      const [squadResult, paymentResult] = await Promise.allSettled([
+      const [squadResult, subscriptionResult] = await Promise.allSettled([
         getMySquad(studentId),
-        getLatestPayment(studentId),
+        getSubscription(studentId),
       ]);
       if (cancelled) return;
 
@@ -135,7 +159,7 @@ export function BottomNav() {
         setStudentSquad(null);
       }
 
-      setPayment(paymentResult.status === "fulfilled" ? paymentResult.value : null);
+      setSubscription(subscriptionResult.status === "fulfilled" ? subscriptionResult.value : null);
     })();
 
     return () => {
@@ -216,7 +240,7 @@ export function BottomNav() {
   // five primary dock items, and not invented destinations.
 
   const extrasLoading = isStudent && !profileIncomplete && studentSquad === undefined;
-  const badge = paymentBadge(payment);
+  const badge = subscriptionBadge(subscription);
 
   let primaryCta: { href: string; label: string; icon: UiIconName } | null = null;
   if (isStudent) {
@@ -239,7 +263,7 @@ export function BottomNav() {
         {
           href: "/squad/subscribe",
           label: "Subscribe",
-          desc: "Mentor-fee payment status",
+          desc: "Your plan, expiry & extend",
           icon: "credit-card",
           badge,
         },
