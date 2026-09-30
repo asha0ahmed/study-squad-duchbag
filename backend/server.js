@@ -2008,9 +2008,28 @@ app.patch('/squads/:squadId/reassign-mentor', async (req, res) => {
 });
 
 
+// Idempotency for chat sends: the client tags every message with a
+// client-generated `client_id`. If a request times out or the response is
+// lost and the user taps Retry, the retry carries the same client_id and
+// gets the already-created row back instead of inserting a duplicate.
+// In-memory only (no schema change); entries expire after 10 minutes.
+const CLIENT_MESSAGE_TTL_MS = 10 * 60 * 1000;
+const recentClientMessages = new Map(); // key -> { row } | { pending: true }, plus expires
+
+function pruneClientMessages() {
+  const now = Date.now();
+  for (const [key, entry] of recentClientMessages) {
+    if (entry.expires < now) recentClientMessages.delete(key);
+  }
+}
+setInterval(pruneClientMessages, 60 * 1000).unref();
+
 app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, messageLimiter, singleChatAttachmentUpload('file'), async (req, res) => {
   const squadId = parseInt(req.params.squadId);
   const { message, duration } = req.body;
+  const rawClientId = typeof req.body.client_id === 'string' ? req.body.client_id.trim() : '';
+  const clientId = /^[A-Za-z0-9_-]{8,64}$/.test(rawClientId) ? rawClientId : null;
+  let clientKey = null;
 
   const trimmedMessage = typeof message === 'string' ? message.trim() : '';
   const hasText = trimmedMessage.length > 0;
@@ -2055,6 +2074,19 @@ app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, me
       return res.status(403).json({ error: 'You are not authorized to send messages in this squad.' });
     }
 
+    if (clientId) {
+      clientKey = `${squadId}:${senderType}:${senderId}:${clientId}`;
+      const existing = recentClientMessages.get(clientKey);
+      if (existing?.row) {
+        // Retry of a message that was already stored -- return it, don't re-insert or re-broadcast.
+        return res.status(200).json(existing.row);
+      }
+      if (existing?.pending) {
+        return res.status(409).json({ error: 'That message is still being sent. Try again in a moment.' });
+      }
+      recentClientMessages.set(clientKey, { pending: true, expires: Date.now() + CLIENT_MESSAGE_TTL_MS });
+    }
+
     // Attachment (image or voice clip) is optional and mutually
     // descriptive of message_type -- a message is 'image'/'voice' only
     // when a file came with it, otherwise it's plain 'text'.
@@ -2072,6 +2104,7 @@ app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, me
         });
       } catch (uploadErr) {
         console.error('Cloudinary upload failed (chat attachment):', uploadErr);
+        if (clientKey) recentClientMessages.delete(clientKey);
         return res.status(502).json({ error: 'Something went wrong uploading your attachment.' });
       }
     }
@@ -2106,6 +2139,9 @@ app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, me
     );
 
     const created = insertResult.rows[0];
+    if (clientKey) {
+      recentClientMessages.set(clientKey, { row: created, expires: Date.now() + CLIENT_MESSAGE_TTL_MS });
+    }
     res.status(201).json(created);
 
     // Push to everyone else currently viewing this squad's chat. Looked up
@@ -2121,12 +2157,15 @@ app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, me
         [created.id]
       );
       if (enriched.rows[0]) {
-        io.to(`squad:${squadId}`).emit('new_message', enriched.rows[0]);
+        // client_id is echoed (never stored) so the sender's own client can
+        // recognise the broadcast of a message it already shows optimistically.
+        io.to(`squad:${squadId}`).emit('new_message', { ...enriched.rows[0], client_id: clientId });
       }
     } catch (broadcastErr) {
       console.error('Failed to broadcast new message over socket:', broadcastErr);
     }
   } catch (err) {
+    if (clientKey && recentClientMessages.get(clientKey)?.pending) recentClientMessages.delete(clientKey);
     console.error(err);
     res.status(500).json({ error: 'Something went wrong sending the message.' });
   }

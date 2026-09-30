@@ -1,5 +1,26 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 8 — Squad Notes: Messenger-style sending + Camera/Gallery menu
+
+- **Optimistic sending.** Messages appear instantly with "Sending…", then
+  "✓ Sent", or "Failed to send" with per-message **Retry** / **Remove**. The
+  input and Send button are never disabled while sending. Messages go out
+  through a client-side queue (one request at a time) so server order matches
+  send order; a failed or timed-out message is skipped, not blocking.
+- **No duplicates.** Each send carries a client-generated `client_id`. The
+  Socket.IO broadcast echoes it (never stored), and the server remembers it
+  for 10 minutes (in memory) so a Retry of a message that actually went
+  through returns the existing row instead of inserting again. Broadcast,
+  reconnect catch-up/poll and POST response all merge through one
+  id-deduplicating, id-ordered path.
+- **Attachment menu.** The image button now opens 📷 Camera / 🖼️ Gallery /
+  Cancel (opens upward inside the chat area, never over the dock). Phones use
+  the native camera via `capture`; desktop opens a webcam dialog
+  (`getUserMedia`) and falls back to the file picker if unavailable.
+- Files: `backend/server.js`, `frontend/app/squad/notes/page.tsx`,
+  `frontend/lib/api.ts`, `frontend/lib/types.ts`, `frontend/app/globals.css`.
+  No schema/migration, auth, or dependency changes.
+
 ## Session 7 — 7-day free trial for invited students + stackable renewals
 
 ### What changed

@@ -224,6 +224,7 @@ async function requestForm<T>(
   path: string,
   formData: FormData,
   method: "POST" | "PATCH" = "POST",
+  signal?: AbortSignal,
 ): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getToken();
@@ -231,7 +232,7 @@ async function requestForm<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${BASE_URL}${path}`, { method, headers, body: formData });
+    response = await fetch(`${BASE_URL}${path}`, { method, headers, body: formData, signal });
   } catch {
     throw new ApiError(0, "Couldn't reach the server. Check your connection and try again.");
   }
@@ -258,6 +259,8 @@ interface RequestOptions {
   adminSecret?: string;
   /** Skip attaching the Authorization header (only needed pre-login). */
   skipAuth?: boolean;
+  /** Lets a caller abort a slow request (used by chat sends). */
+  signal?: AbortSignal;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -280,6 +283,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       method: options.method ?? "GET",
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: options.signal,
     });
   } catch {
     // Network failure — backend unreachable, offline, CORS, etc.
@@ -602,21 +606,24 @@ export function sendSquadMessage(
   squadId: number,
   message?: string,
   attachment?: SendSquadMessageAttachment,
+  options: { clientId?: string; signal?: AbortSignal } = {},
 ) {
   if (!attachment) {
     return request<SquadMessageInsertResult>(`/squads/${squadId}/messages`, {
       method: "POST",
-      body: { message },
+      body: { message, client_id: options.clientId },
+      signal: options.signal,
     });
   }
 
   const formData = new FormData();
   if (message) formData.append("message", message);
+  if (options.clientId) formData.append("client_id", options.clientId);
   if (attachment.durationSeconds) {
     formData.append("duration", String(Math.round(attachment.durationSeconds)));
   }
   formData.append("file", attachment.file, attachment.file instanceof File ? attachment.file.name : "voice-message");
-  return requestForm<SquadMessageInsertResult>(`/squads/${squadId}/messages`, formData, "POST");
+  return requestForm<SquadMessageInsertResult>(`/squads/${squadId}/messages`, formData, "POST", options.signal);
 }
 
 export interface GetSquadMessagesOptions {

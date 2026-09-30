@@ -888,3 +888,78 @@ body.has-bottom-dock {
     padding-bottom: 2rem;
   }
 }
+
+/* ---------------------------------------------------------------- */
+/* Squad Notes — attachment menu (Camera / Gallery / Cancel)          */
+/* ---------------------------------------------------------------- */
+/* Anchored to the image button and opens UPWARD inside the chat area,
+   so it never reaches the bottom dock. */
+.chat-attach-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.chat-attach-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.5rem);
+  z-index: 20;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+}
+
+.chat-attach-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  border-radius: calc(var(--radius-md) - 4px);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: left;
+  color: var(--color-text);
+  transition: background 0.15s ease;
+}
+.chat-attach-item:hover,
+.chat-attach-item:focus-visible {
+  background: var(--color-surface-hover);
+}
+.chat-attach-cancel {
+  color: var(--color-text-dim);
+  border-top: 1px solid var(--color-border-soft);
+  border-radius: 0 0 calc(var(--radius-md) - 4px) calc(var(--radius-md) - 4px);
+}
+
+/* Desktop webcam capture dialog (full-screen modal above the dock). */
+.chat-camera-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(5, 8, 18, 0.8);
+}
+.chat-camera-panel {
+  width: 100%;
+  max-width: 34rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+.chat-camera-video {
+  display: block;
+  width: 100%;
+  max-height: 60dvh;
+  border-radius: calc(var(--radius-md) - 4px);
+  background: #000;
+  object-fit: cover;
+}

@@ -14,7 +14,7 @@ import {
   sendSquadMessage,
   StoredSession,
 } from "@/lib/api";
-import type { SquadMessage } from "@/lib/types";
+import type { SquadMessage, SquadMessageType } from "@/lib/types";
 import { getSocket } from "@/lib/socket";
 import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
@@ -65,6 +65,144 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+// ---- Optimistic ("Messenger-style") sending ----
+
+/** Give up on one send attempt after this long so a hung request can't block the queue. */
+const TEXT_SEND_TIMEOUT_MS = 20_000;
+const ATTACHMENT_SEND_TIMEOUT_MS = 120_000;
+/** How long the "Sent" tick stays visible under a just-confirmed message. */
+const SENT_LABEL_MS = 2500;
+
+type OutboxStatus = "sending" | "failed";
+
+/** A message the user sent that the server hasn't confirmed yet. */
+interface OutboxItem {
+  clientId: string;
+  squadId: number;
+  type: SquadMessageType;
+  /** Trimmed text, or null for attachment-only messages (mirrors what the server stores). */
+  text: string | null;
+  file?: Blob;
+  durationSeconds?: number;
+  status: OutboxStatus;
+  error?: string;
+  /** Local object URL for image/voice preview; revoked once the message is confirmed. */
+  previewUrl: string | null;
+  /** What the bubble renders while pending. */
+  display: SquadMessage;
+}
+
+function makeClientId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/**
+ * Adds rows to the message list without duplicates (by server id) and keeps
+ * the list in ascending id order, so a broadcast, a poll and a POST response
+ * for the same message can arrive in any order and still yield one bubble.
+ */
+function mergeMessages(prev: SquadMessage[], rows: SquadMessage[]): SquadMessage[] {
+  const ids = new Set(prev.map((m) => m.id));
+  const added: SquadMessage[] = [];
+  for (const row of rows) {
+    if (ids.has(row.id)) continue;
+    ids.add(row.id);
+    added.push(row);
+  }
+  if (added.length === 0) return prev;
+  const next = [...prev, ...added];
+  for (let i = 1; i < next.length; i += 1) {
+    if (next[i - 1].id > next[i].id) {
+      next.sort((a, b) => a.id - b.id);
+      break;
+    }
+  }
+  return next;
+}
+
+/** Desktop "Camera": live webcam preview with a capture button. */
+function CameraCapture({
+  onCapture,
+  onClose,
+  onUnavailable,
+}: {
+  onCapture: (file: File) => void;
+  onClose: () => void;
+  onUnavailable: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "user" }, audio: false })
+      .then((stream) => {
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          video.play().catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) onUnavailable();
+      });
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, [onUnavailable]);
+
+  function takePhoto() {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        onCapture(new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" }));
+      },
+      "image/jpeg",
+      0.9,
+    );
+  }
+
+  return (
+    <div className="chat-camera-backdrop" role="dialog" aria-modal="true" aria-label="Take a photo">
+      <div className="chat-camera-panel">
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          onLoadedData={() => setReady(true)}
+          className="chat-camera-video"
+        />
+        <div className="flex items-center justify-center gap-3 pt-3">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="button" onClick={takePhoto} disabled={!ready} className="btn btn-primary">
+            Take photo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * One chat bubble. Memoized so that appending new messages (poll) or
  * prepending older ones (scroll-up) doesn't re-render every bubble
@@ -75,12 +213,24 @@ function formatTime(iso: string) {
 const MessageRow = memo(function MessageRow({
   message,
   mine,
+  clientId,
+  status,
+  sent,
+  onRetry,
+  onDiscard,
 }: {
   message: SquadMessage;
   mine: boolean;
+  /** Set only for not-yet-confirmed messages from the outbox. */
+  clientId?: string;
+  status?: OutboxStatus;
+  /** Briefly true right after a message is confirmed by the server. */
+  sent?: boolean;
+  onRetry?: (clientId: string) => void;
+  onDiscard?: (clientId: string) => void;
 }) {
   return (
-    <div className="flex items-start gap-3 py-3">
+    <div className={`flex items-start gap-3 py-3 ${status === "sending" ? "opacity-70" : ""}`}>
       <Avatar name={message.sender_name} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
@@ -114,6 +264,31 @@ const MessageRow = memo(function MessageRow({
           </div>
         )}
         {message.message && <p className="mt-0.5 break-words text-[15px] text-text">{message.message}</p>}
+        {status === "sending" && (
+          <p className="mt-0.5 text-xs italic text-text-faint" aria-live="polite">
+            Sending…
+          </p>
+        )}
+        {status === "failed" && clientId && (
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="font-semibold text-coral">Failed to send</span>
+            <button
+              type="button"
+              onClick={() => onRetry?.(clientId)}
+              className="font-semibold text-cyan underline underline-offset-2"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => onDiscard?.(clientId)}
+              className="text-text-faint underline underline-offset-2"
+            >
+              Remove
+            </button>
+          </p>
+        )}
+        {sent && !status && <p className="mt-0.5 text-xs text-emerald">✓ Sent</p>}
       </div>
     </div>
   );
@@ -131,11 +306,26 @@ function SquadNotesContent() {
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
+  const attachWrapRef = useRef<HTMLDivElement>(null);
+
+  // Attachment menu (Camera / Gallery / Cancel) + desktop webcam dialog.
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+
+  // Optimistic outbox: messages shown immediately, each with its own
+  // Sending / Failed state, until the server confirms them.
+  const [outbox, setOutbox] = useState<OutboxItem[]>([]);
+  const [sentIds, setSentIds] = useState<Set<number>>(() => new Set());
+  const outboxRef = useRef<OutboxItem[]>([]);
+  const sendQueueRef = useRef<string[]>([]);
+  const queueRunningRef = useRef(false);
+  const sentTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const identityRef = useRef<{ role: string; id: number; name: string } | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -182,7 +372,7 @@ function SquadNotesContent() {
     } else {
       el.scrollTop = el.scrollHeight - action.previousScrollHeight + action.previousScrollTop;
     }
-  }, [messages]);
+  }, [messages, outbox]);
 
   useEffect(() => {
     const s = getSession();
@@ -190,6 +380,15 @@ function SquadNotesContent() {
     setSession(s);
     setSessionChecked(true);
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      identityRef.current = null;
+      return;
+    }
+    const person = session.role === "student" ? session.student : session.mentor;
+    identityRef.current = person ? { role: session.role, id: person.id, name: person.name } : null;
+  }, [session]);
 
   useEffect(() => {
     if (sessionChecked && !session) router.replace("/auth");
@@ -239,6 +438,81 @@ function SquadNotesContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch-on-mount, setState only happens after the request resolves
     if (session) resolveAccess();
   }, [session, resolveAccess]);
+
+  // ---- Outbox helpers (kept in a ref AND state so async code sees current data) ----
+  const updateOutbox = useCallback((fn: (prev: OutboxItem[]) => OutboxItem[]) => {
+    outboxRef.current = fn(outboxRef.current);
+    setOutbox(outboxRef.current);
+  }, []);
+
+  const dropOutboxItem = useCallback(
+    (clientId: string) => {
+      const item = outboxRef.current.find((i) => i.clientId === clientId);
+      if (!item) return null;
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      updateOutbox((prev) => prev.filter((i) => i.clientId !== clientId));
+      return item;
+    },
+    [updateOutbox],
+  );
+
+  const flashSent = useCallback((id: number) => {
+    setSentIds((prev) => new Set(prev).add(id));
+    const timer = setTimeout(() => {
+      setSentIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, SENT_LABEL_MS);
+    sentTimersRef.current.push(timer);
+  }, []);
+
+  /**
+   * Single entry point for rows that arrive from the server by ANY route
+   * (socket broadcast, reconnect catch-up / fallback poll, or the POST
+   * response). Rows are deduped by id; a row that corresponds to one of this
+   * user's pending messages replaces that pending bubble instead of showing
+   * up next to it. Broadcasts carry the sender's client_id for an exact
+   * match; poll rows don't, so those fall back to (sender, type, text).
+   */
+  const applyIncoming = useCallback(
+    (rows: SquadMessage[], squadId: number, fromOwnResponse?: { clientId: string }) => {
+      if (rows.length === 0) return;
+      const me = identityRef.current;
+      let confirmedOwn = false;
+
+      for (const row of rows) {
+        let pending: OutboxItem | undefined;
+        if (fromOwnResponse) {
+          pending = outboxRef.current.find((i) => i.clientId === fromOwnResponse.clientId);
+        } else if (row.client_id) {
+          pending = outboxRef.current.find((i) => i.clientId === row.client_id);
+        } else if (me && row.sender_type === me.role && row.sender_id === me.id) {
+          pending = outboxRef.current.find(
+            (i) => i.squadId === squadId && i.type === row.message_type && (i.text ?? null) === (row.message ?? null),
+          );
+        }
+        if (pending) {
+          dropOutboxItem(pending.clientId);
+          flashSent(row.id);
+          confirmedOwn = true;
+        }
+      }
+
+      if (confirmedOwn) {
+        pendingScrollActionRef.current = { type: "bottom" };
+        isNearBottomRef.current = true;
+      } else if (isNearBottomRef.current) {
+        pendingScrollActionRef.current = { type: "bottom" };
+      }
+      setMessages((prev) => mergeMessages(prev, rows));
+
+      const newest = rows[rows.length - 1];
+      markNotesSeen(squadId, newest.created_at);
+    },
+    [dropOutboxItem, flashSent],
+  );
 
   // ---- Initial load: latest page only, never the full history ----
   const loadInitialMessages = useCallback(async (squadId: number) => {
@@ -316,33 +590,17 @@ function SquadNotesContent() {
       const page = await getSquadMessages(squadId, { after: latest.id });
       if (page.messages.length === 0) return;
 
-      // Dedup against `prev` (the array as it actually is when this
-      // updater runs), not the `current` snapshot taken before the
-      // await -- if the user sent a message of their own while this
-      // poll was in flight, `prev` already includes it and this avoids
-      // appending it a second time.
-      setMessages((prev) => {
-        const existingIds = new Set(prev.map((m) => m.id));
-        const fresh = page.messages.filter((m) => !existingIds.has(m.id));
-        if (fresh.length === 0) return prev;
-        if (isNearBottomRef.current) {
-          pendingScrollActionRef.current = { type: "bottom" };
-        }
-        return [...prev, ...fresh];
-      });
-
-      // The "seen" marker only needs the newest id/timestamp the server
-      // told us about, which `page.messages` already gives us directly --
-      // no need to know exactly which of them ended up newly appended.
-      const newest = page.messages[page.messages.length - 1];
-      markNotesSeen(squadId, newest.created_at);
+      // Dedup (by id, against the list as it is when the update runs) and
+      // reconciliation with this user's pending messages both live in
+      // applyIncoming -- see its comment.
+      applyIncoming(page.messages, squadId);
     } catch {
       // Silent on poll failures -- don't interrupt an otherwise-working
       // chat over one flaky request; the next poll will retry.
     } finally {
       pollInFlightRef.current = false;
     }
-  }, []);
+  }, [applyIncoming]);
 
   useEffect(() => {
     if (access.state !== "ready") return;
@@ -353,14 +611,7 @@ function SquadNotesContent() {
     const socket = getSocket();
 
     function handleNewMessage(row: SquadMessage) {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === row.id)) return prev;
-        if (isNearBottomRef.current) {
-          pendingScrollActionRef.current = { type: "bottom" };
-        }
-        return [...prev, row];
-      });
-      markNotesSeen(squadId, row.created_at);
+      applyIncoming([row], squadId);
     }
 
     function handleConnect() {
@@ -406,7 +657,7 @@ function SquadNotesContent() {
       socket.disconnect();
       clearInterval(fallbackPoll);
     };
-  }, [access, loadInitialMessages, pollNewMessages]);
+  }, [access, loadInitialMessages, pollNewMessages, applyIncoming]);
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -420,53 +671,186 @@ function SquadNotesContent() {
     }
   }
 
-  /** Appends a message this user just sent, without refetching anything. */
-  function appendOwnMessage(squadId: number, row: SquadMessage) {
+  // ---- Sending: optimistic, one independent state per message ----
+
+  /**
+   * Sends queued messages one at a time (so the server stores them in the
+   * order the user sent them -- parallel uploads could otherwise overtake
+   * each other on a slow network) but never blocks the UI: the composer stays
+   * usable, every message shows immediately, and a message that fails or
+   * times out is marked Failed and skipped so it can't hold up the ones
+   * behind it.
+   */
+  const pumpQueue = useCallback(async () => {
+    if (queueRunningRef.current) return;
+    queueRunningRef.current = true;
+    try {
+      while (sendQueueRef.current.length > 0) {
+        const clientId = sendQueueRef.current.shift() as string;
+        const item = outboxRef.current.find((i) => i.clientId === clientId);
+        // Already confirmed via broadcast/poll, or removed by the user.
+        if (!item || item.status !== "sending") continue;
+
+        const controller = new AbortController();
+        const timeout = setTimeout(
+          () => controller.abort(),
+          item.file ? ATTACHMENT_SEND_TIMEOUT_MS : TEXT_SEND_TIMEOUT_MS,
+        );
+        try {
+          const created = await sendSquadMessage(
+            item.squadId,
+            item.text ?? undefined,
+            item.file ? { file: item.file, durationSeconds: item.durationSeconds } : undefined,
+            { clientId, signal: controller.signal },
+          );
+          const name = identityRef.current?.name ?? "You";
+          applyIncoming([{ ...created, sender_name: name }], item.squadId, { clientId });
+        } catch (err) {
+          const aborted = err instanceof DOMException && err.name === "AbortError";
+          const message = aborted
+            ? "Timed out. Check your connection and retry."
+            : err instanceof ApiError
+              ? err.message
+              : "Couldn't send that message.";
+          // If a broadcast already confirmed it, the item is gone -- nothing to mark.
+          updateOutbox((prev) =>
+            prev.map((i) => (i.clientId === clientId ? { ...i, status: "failed", error: message } : i)),
+          );
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+    } finally {
+      queueRunningRef.current = false;
+    }
+  }, [applyIncoming, updateOutbox]);
+
+  function enqueueMessage(payload: {
+    type: SquadMessageType;
+    text?: string;
+    file?: Blob;
+    durationSeconds?: number;
+  }) {
+    if (access.state !== "ready") return;
+    const me = identityRef.current;
+    const clientId = makeClientId();
+    const previewUrl = payload.file ? URL.createObjectURL(payload.file) : null;
+    const item: OutboxItem = {
+      clientId,
+      squadId: access.squadId,
+      type: payload.type,
+      text: payload.text ?? null,
+      file: payload.file,
+      durationSeconds: payload.durationSeconds,
+      status: "sending",
+      previewUrl,
+      display: {
+        id: -1,
+        sender_type: (me?.role ?? "student") as SquadMessage["sender_type"],
+        sender_id: me?.id ?? 0,
+        message: payload.text ?? null,
+        message_type: payload.type,
+        attachment_url: previewUrl,
+        attachment_format: null,
+        attachment_bytes: payload.file?.size ?? null,
+        attachment_duration_seconds: payload.durationSeconds ?? null,
+        created_at: new Date().toISOString(),
+        sender_name: me?.name ?? "You",
+      },
+    };
     pendingScrollActionRef.current = { type: "bottom" };
     isNearBottomRef.current = true;
-    setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
-    markNotesSeen(squadId, row.created_at);
+    updateOutbox((prev) => [...prev, item]);
+    sendQueueRef.current.push(clientId);
+    void pumpQueue();
   }
 
-  function myDisplayName() {
-    if (!session) return "You";
-    return (session.role === "student" ? session.student?.name : session.mentor?.name) ?? "You";
-  }
+  const retryMessage = useCallback(
+    (clientId: string) => {
+      updateOutbox((prev) =>
+        prev.map((i) => (i.clientId === clientId ? { ...i, status: "sending", error: undefined } : i)),
+      );
+      if (!sendQueueRef.current.includes(clientId)) sendQueueRef.current.push(clientId);
+      void pumpQueue();
+    },
+    [pumpQueue, updateOutbox],
+  );
 
-  async function handleSend(e: React.FormEvent) {
+  const discardMessage = useCallback(
+    (clientId: string) => {
+      dropOutboxItem(clientId);
+    },
+    [dropOutboxItem],
+  );
+
+  function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (sending || access.state !== "ready" || !draft.trim()) return;
+    const text = draft.trim();
+    if (access.state !== "ready" || !text) return;
     setError(null);
-    setSending(true);
+    setDraft("");
+    enqueueMessage({ type: "text", text });
     // Keep the keyboard open (Messenger-style): hold focus on the typing box.
     textInputRef.current?.focus();
-    try {
-      const created = await sendSquadMessage(access.squadId, draft.trim());
-      appendOwnMessage(access.squadId, { ...created, sender_name: myDisplayName() });
-      setDraft("");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't send that message.");
-    } finally {
-      setSending(false);
-      textInputRef.current?.focus();
+  }
+
+  function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow picking the same file again later
+    setAttachMenuOpen(false);
+    if (!file || access.state !== "ready") return;
+    setError(null);
+    enqueueMessage({ type: "image", file });
+  }
+
+  // ---- Attachment menu: Camera / Gallery / Cancel ----
+  function chooseGallery() {
+    setAttachMenuOpen(false);
+    galleryInputRef.current?.click();
+  }
+
+  function chooseCamera() {
+    setAttachMenuOpen(false);
+    const coarsePointer =
+      typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+    const canUseWebcam =
+      typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
+    if (!coarsePointer && canUseWebcam) {
+      // Desktop: a file input's `capture` hint is ignored, so open the webcam directly.
+      setCameraOpen(true);
+    } else {
+      // Phones/tablets: the `capture` input launches the native camera app.
+      cameraInputRef.current?.click();
     }
   }
 
-  async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow picking the same file again later
-    if (!file || access.state !== "ready") return;
+  const handleCameraUnavailable = useCallback(() => {
+    setCameraOpen(false);
+    setError("Couldn't access your camera. Check your browser's camera permission, or pick from Gallery.");
+  }, []);
+
+  function handleCameraCaptured(file: File) {
+    setCameraOpen(false);
+    if (access.state !== "ready") return;
     setError(null);
-    setSending(true);
-    try {
-      const created = await sendSquadMessage(access.squadId, undefined, { file });
-      appendOwnMessage(access.squadId, { ...created, sender_name: myDisplayName() });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't send that image.");
-    } finally {
-      setSending(false);
-    }
+    enqueueMessage({ type: "image", file });
   }
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!attachWrapRef.current?.contains(event.target as Node)) setAttachMenuOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setAttachMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [attachMenuOpen]);
 
   async function startRecording() {
     if (access.state !== "ready" || isRecording) return;
@@ -526,16 +910,17 @@ function SquadNotesContent() {
     if (blob.size === 0) return; // stopped almost instantly -- nothing worth sending
 
     setError(null);
-    setSending(true);
-    try {
-      const created = await sendSquadMessage(access.squadId, undefined, { file: blob, durationSeconds });
-      appendOwnMessage(access.squadId, { ...created, sender_name: myDisplayName() });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't send that voice message.");
-    } finally {
-      setSending(false);
-    }
+    enqueueMessage({ type: "voice", file: blob, durationSeconds });
   }
+
+  useEffect(() => {
+    const timers = sentTimersRef;
+    const pending = outboxRef;
+    return () => {
+      timers.current.forEach(clearTimeout);
+      pending.current.forEach((i) => i.previewUrl && URL.revokeObjectURL(i.previewUrl));
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -594,7 +979,7 @@ function SquadNotesContent() {
           onScroll={handleScroll}
           className="chat-message-pane card mt-4 min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4"
         >
-          {messages.length === 0 ? (
+          {messages.length === 0 && outbox.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
               <UiIcon name="message" className="h-7 w-7 text-text-faint" />
               <p className="text-sm text-text-faint">No notes yet. Say hello.</p>
@@ -611,8 +996,19 @@ function SquadNotesContent() {
               )}
               {messages.map((m) => {
                 const mine = m.sender_type === session.role && m.sender_id === currentSenderId;
-                return <MessageRow key={m.id} message={m} mine={mine} />;
+                return <MessageRow key={m.id} message={m} mine={mine} sent={sentIds.has(m.id)} />;
               })}
+              {outbox.map((o) => (
+                <MessageRow
+                  key={o.clientId}
+                  clientId={o.clientId}
+                  message={o.display}
+                  mine
+                  status={o.status}
+                  onRetry={retryMessage}
+                  onDiscard={discardMessage}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -621,21 +1017,51 @@ function SquadNotesContent() {
           <input
             type="file"
             accept="image/*"
-            ref={imageInputRef}
+            ref={galleryInputRef}
             onChange={handleImageSelected}
             className="hidden"
           />
-          {/* 1. Image */}
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            disabled={sending || isRecording}
-            className="chat-icon-btn"
-            aria-label="Send an image"
-            title="Send an image"
-          >
-            <UiIcon name="image" className="h-5 w-5" />
-          </button>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            ref={cameraInputRef}
+            onChange={handleImageSelected}
+            className="hidden"
+          />
+          {/* 1. Image: opens the Camera / Gallery / Cancel menu */}
+          <div ref={attachWrapRef} className="chat-attach-wrap">
+            <button
+              type="button"
+              onClick={() => setAttachMenuOpen((open) => !open)}
+              disabled={isRecording}
+              className="chat-icon-btn"
+              aria-label="Send an image"
+              aria-haspopup="menu"
+              aria-expanded={attachMenuOpen}
+              title="Send an image"
+            >
+              <UiIcon name="image" className="h-5 w-5" />
+            </button>
+            {attachMenuOpen && (
+              <div className="chat-attach-menu" role="menu">
+                <button type="button" role="menuitem" onClick={chooseCamera} className="chat-attach-item">
+                  <span aria-hidden="true">📷</span> Camera
+                </button>
+                <button type="button" role="menuitem" onClick={chooseGallery} className="chat-attach-item">
+                  <span aria-hidden="true">🖼️</span> Gallery
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setAttachMenuOpen(false)}
+                  className="chat-attach-item chat-attach-cancel"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
 
           {isRecording ? (
             <>
@@ -667,7 +1093,6 @@ function SquadNotesContent() {
               <button
                 type="button"
                 onClick={startRecording}
-                disabled={sending}
                 className="chat-icon-btn"
                 aria-label="Record a voice message"
                 title="Record a voice message"
@@ -687,7 +1112,7 @@ function SquadNotesContent() {
               {/* 4. Send */}
               <button
                 type="submit"
-                disabled={sending || !draft.trim()}
+                disabled={!draft.trim()}
                 // Stops the tap from stealing focus off the typing box, so the
                 // keyboard stays up after sending (like Messenger/WhatsApp).
                 onMouseDown={(e) => e.preventDefault()}
@@ -704,6 +1129,13 @@ function SquadNotesContent() {
           <FormError message={error} />
         </div>
       </div>
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={handleCameraCaptured}
+          onClose={() => setCameraOpen(false)}
+          onUnavailable={handleCameraUnavailable}
+        />
+      )}
     </main>
   );
 }

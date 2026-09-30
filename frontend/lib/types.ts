@@ -298,6 +298,8 @@ export interface SquadMessage {
   attachment_duration_seconds: number | null;
   created_at: string;
   sender_name: string;
+  /** Only present on live socket broadcasts: echo of the sender's client-generated id. */
+  client_id?: string | null;
 }
 
 /**
