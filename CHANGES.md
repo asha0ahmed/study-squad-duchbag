@@ -20,6 +20,9 @@
 - Files: `backend/server.js`, `frontend/app/squad/notes/page.tsx`,
   `frontend/lib/api.ts`, `frontend/lib/types.ts`, `frontend/app/globals.css`.
   No schema/migration, auth, or dependency changes.
+- **Promo code no longer saved.** `PaymentForm.tsx` no longer stores the applied
+  promo code in `localStorage`; students enter it each time they open the
+  payment form. Any code saved by the old behaviour is removed on load.
 
 ## Session 7 — 7-day free trial for invited students + stackable renewals
 

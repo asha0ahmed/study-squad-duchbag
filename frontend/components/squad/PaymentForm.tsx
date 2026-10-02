@@ -6,8 +6,8 @@ import { TextField } from "@/components/auth/FormFields";
 import type { PaymentMethod, PaymentPlan } from "@/lib/types";
 
 const PLANS: { value: PaymentPlan; label: string; price: string; discountedPrice: string; note: string }[] = [
-  { value: "1_month", label: "1 Month", price: "৳149", discountedPrice: "৳99", note: "Try it out" },
-  { value: "6_month", label: "6 Months", price: "৳799", discountedPrice: "৳499", note: "Best value" },
+  { value: "1_month", label: "1 Month", price: "৳199", discountedPrice: "৳99", note: "Try it out" },
+  { value: "6_month", label: "6 Months", price: "৳999", discountedPrice: "৳499", note: "Best value" },
 ];
 
 // Frontend-only promotional configuration. Replace the five placeholder codes as needed.
@@ -52,12 +52,9 @@ export function PaymentForm({
   const [promoError, setPromoError] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedPromoCode = window.localStorage.getItem(PROMO_STORAGE_KEY);
-    if (storedPromoCode && VALID_PROMO_CODES.some((code) => code.toLowerCase() === storedPromoCode.toLowerCase())) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of an external system (localStorage) on mount
-      setAppliedPromoCode(storedPromoCode);
-      setPromoCode(storedPromoCode);
-    }
+    // Promo codes are no longer remembered: the student enters one fresh on
+    // every visit to this form. Remove any code saved by the old behaviour.
+    window.localStorage.removeItem(PROMO_STORAGE_KEY);
   }, []);
 
   function handleApplyPromo() {
@@ -72,7 +69,6 @@ export function PaymentForm({
     setAppliedPromoCode(validCode);
     setPromoCode(validCode);
     setPromoError(null);
-    window.localStorage.setItem(PROMO_STORAGE_KEY, validCode);
   }
 
   function handleSubmit(e: React.FormEvent) {
