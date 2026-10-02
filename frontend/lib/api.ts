@@ -90,6 +90,32 @@ function redirectIfSubscriptionEnded() {
   }
 }
 
+/**
+ * Routes a logged-out visitor may see. Everything else needs a student or
+ * mentor session (admin pages run their own secret-based login).
+ */
+export function isPublicPath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/invite") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/terms")
+  );
+}
+
+/**
+ * A protected request got "401 No token provided": the session is gone
+ * (e.g. the user logged out and pressed Back to a page the browser kept in
+ * memory). Send them to the login entry instead of leaving a dead screen.
+ */
+function redirectIfSignedOut() {
+  if (typeof window === "undefined") return;
+  if (isPublicPath(window.location.pathname)) return;
+  window.location.replace("/auth");
+}
+
 // ---- Token / session storage ----
 // Plain localStorage, matching what the backend actually supports today
 // (no refresh-token flow exists yet).
@@ -244,6 +270,7 @@ async function requestForm<T>(
     const body = data as ApiErrorBody | null;
     const subscriptionExpired = response.status === 402 && body?.subscriptionExpired === true;
     if (subscriptionExpired) redirectIfSubscriptionEnded();
+    if (response.status === 401 && !token) redirectIfSignedOut();
     throw new ApiError(response.status, body?.error ?? "Something went wrong.", subscriptionExpired);
   }
 
@@ -299,6 +326,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const body = data as ApiErrorBody | null;
     const subscriptionExpired = response.status === 402 && body?.subscriptionExpired === true;
     if (subscriptionExpired) redirectIfSubscriptionEnded();
+    if (response.status === 401 && !options.skipAuth && !options.adminSecret && !getToken()) {
+      redirectIfSignedOut();
+    }
     throw new ApiError(response.status, body?.error ?? "Something went wrong.", subscriptionExpired);
   }
 

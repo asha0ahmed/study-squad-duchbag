@@ -6,8 +6,8 @@ import { TextField } from "@/components/auth/FormFields";
 import type { PaymentMethod, PaymentPlan } from "@/lib/types";
 
 const PLANS: { value: PaymentPlan; label: string; price: string; discountedPrice: string; note: string }[] = [
-  { value: "1_month", label: "1 Month", price: "৳199", discountedPrice: "৳99", note: "Try it out" },
-  { value: "6_month", label: "6 Months", price: "৳999", discountedPrice: "৳499", note: "Best value" },
+  { value: "1_month", label: "1 Month", price: "৳149", discountedPrice: "৳99", note: "Try it out" },
+  { value: "6_month", label: "6 Months", price: "৳799", discountedPrice: "৳499", note: "Best value" },
 ];
 
 // Frontend-only promotional configuration. Replace the five placeholder codes as needed.

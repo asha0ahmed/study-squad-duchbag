@@ -20,6 +20,13 @@
 - Files: `backend/server.js`, `frontend/app/squad/notes/page.tsx`,
   `frontend/lib/api.ts`, `frontend/lib/types.ts`, `frontend/app/globals.css`.
   No schema/migration, auth, or dependency changes.
+- **Landing page:** new live-feeling "~400 students have already joined" line
+  (`components/landing/JoinedCounter.tsx`) under the headline on mobile and
+  before the CTA buttons on desktop.
+- **Back after logout:** new `AuthGuard` (mounted in `app/layout.tsx`) re-checks
+  the session on page show / bfcache restore / tab refocus / logout in another
+  tab and sends signed-out users to `/auth`; `lib/api.ts` also redirects on a
+  401 "No token provided" from a protected page.
 - **Promo code no longer saved.** `PaymentForm.tsx` no longer stores the applied
   promo code in `localStorage`; students enter it each time they open the
   payment form. Any code saved by the old behaviour is removed on load.

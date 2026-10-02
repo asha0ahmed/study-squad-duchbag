@@ -20,6 +20,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { AspirantBackground } from "@/components/layout/AspirantBackground";
 import { SquadChatFloatingButton } from "@/components/layout/SquadChatFloatingButton";
 import { SubscriptionReminderPopup } from "@/components/layout/SubscriptionReminderPopup";
+import { AuthGuard } from "@/components/layout/AuthGuard";
 
 export const metadata: Metadata = {
   title: "Study Squad",
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="bg-app min-h-full flex flex-col bg-bg text-text font-sans">
+        <AuthGuard />
         <AspirantBackground />
         <Navbar />
         {children}

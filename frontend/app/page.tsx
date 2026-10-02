@@ -4,6 +4,7 @@ import type { AcademicGroup } from "@/lib/types";
 import { HomeRedirect } from "@/components/layout/HomeRedirect";
 import { RunningSquadsSection } from "@/components/landing/RunningSquadsSection";
 import { HeroImageSlider } from "@/components/landing/HeroImageSlider";
+import { JoinedCounter } from "@/components/landing/JoinedCounter";
 import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 
 const MEMBERS = ["Rafi", "Anika", "Tanvir", "Nusrat", "Farhan", "Mim"];
@@ -65,6 +66,8 @@ export default function Home() {
             <h1 className="mt-1 font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-text sm:text-6xl lg:mt-3 lg:text-[4.3rem] lg:leading-[0.92] xl:text-[5rem]">
               Your squad is <span className="text-gradient-brand">waiting</span> for you.
             </h1>
+            {/* Mobile: right under the headline, above the image slider. */}
+            <JoinedCounter className="mt-3 flex lg:hidden" />
             <div className="lg:max-w-[36rem]">
               <HeroImageSlider />
             </div>
@@ -74,7 +77,9 @@ export default function Home() {
                Study Squad-এ তোমার সাথে থাকবে আরও ৫ জন। একসাথে পড়ব, একে অপরকে push করব, 
                আর পিছিয়ে পড়লে আবার উঠে দাঁড়াব।
             </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row lg:mt-10 lg:max-w-[30rem] lg:gap-4">
+            {/* Desktop: after the pitch, right before the call-to-action buttons. */}
+            <JoinedCounter className="mt-7 hidden lg:flex" />
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row lg:mt-8 lg:max-w-[30rem] lg:gap-4">
               <Link href="/auth/student/login" className="btn btn-primary min-h-[52px] px-7 text-base lg:min-h-[58px] lg:px-8 lg:text-[1rem]">
                 I&apos;m a Student
               </Link>
