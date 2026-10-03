@@ -55,11 +55,11 @@ export function SquadIcon(props: IconProps) {
   );
 }
 
-export function NoteIcon(props: IconProps) {
+export function ExamIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <path d="M4.5 5.5A1.5 1.5 0 0 1 6 4h10.2a1.5 1.5 0 0 1 1.06.44l2.3 2.3A1.5 1.5 0 0 1 20 7.8V18.5A1.5 1.5 0 0 1 18.5 20H6A1.5 1.5 0 0 1 4.5 18.5z" />
-      <path d="M8 9.5h8M8 13h8M8 16.25h5" />
+      <path d="M6 3.75h12A1.5 1.5 0 0 1 19.5 5.25v13.5A1.5 1.5 0 0 1 18 20.25H6a1.5 1.5 0 0 1-1.5-1.5V5.25A1.5 1.5 0 0 1 6 3.75Z" />
+      <path d="m7.5 8.25 1.25 1.25 2-2M12.75 8.75h3.75M7.5 13l1.25 1.25 2-2M12.75 13.5h3.75M7.5 17h9" />
     </svg>
   );
 }

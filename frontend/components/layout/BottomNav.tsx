@@ -15,8 +15,8 @@ import type { StudentSquadView, SubscriptionInfo } from "@/lib/types";
 import {
   CloseIcon,
   DashboardIcon,
+  ExamIcon,
   MoreIcon,
-  NoteIcon,
   SquadIcon,
   StarIcon,
   TaskIcon,
@@ -215,7 +215,7 @@ export function BottomNav() {
         key: "note",
         href: "https://noteviewe.netlify.app",
         label: "Note",
-        icon: NoteIcon,
+        icon: ExamIcon,
         match: () => false,
       },
       {
