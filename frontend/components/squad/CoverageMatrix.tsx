@@ -1,5 +1,6 @@
 import type { MemberStatus } from "@/lib/types";
 import { Avatar } from "@/components/ui/Avatar";
+import { SQUAD_SIZE } from "@/lib/squadConfig";
 
 export interface CoverageMatrixMember {
   slot: number;
@@ -8,7 +9,7 @@ export interface CoverageMatrixMember {
   status?: MemberStatus;
 }
 
-const TOTAL_SLOTS = 6;
+const TOTAL_SLOTS = SQUAD_SIZE;
 
 export function CoverageMatrix({
   subjects,
@@ -23,7 +24,7 @@ export function CoverageMatrix({
   return (
     <div className="card-flat overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse">
+        <table className="w-full min-w-[1100px] border-collapse">
           <thead>
             <tr className="border-b border-border">
               <th className="w-40 shrink-0 border-r border-border-soft px-4 py-3.5 text-left">

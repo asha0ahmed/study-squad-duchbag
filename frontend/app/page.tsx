@@ -7,7 +7,7 @@ import { HeroImageSlider } from "@/components/landing/HeroImageSlider";
 import { JoinedCounter } from "@/components/landing/JoinedCounter";
 import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 
-const MEMBERS = ["Rafi", "Anika", "Tanvir", "Nusrat", "Farhan", "Mim"];
+const MEMBERS = ["Rafi", "Anika", "Tanvir", "Nusrat", "Farhan", "Mim", "Sabbir", "Tasnim", "Joy", "Rima"];
 
 // Canonical list of academic groups the platform matches on -- pulled from
 // the same source of truth the Profiler and matching logic use, so this
@@ -96,7 +96,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-sm text-text-dim lg:text-base">
-                Six-member squads across Science &amp; Arts, HSC to admission tests.
+                Ten-member squads across Science &amp; Arts, HSC to admission tests.
               </p>
             </div>
           </div>
@@ -113,11 +113,11 @@ export default function Home() {
                 <span className="badge badge-emerald lg:px-3 lg:py-1.5">Active</span>
               </div>
 
-              <div className="relative z-10 mt-6 grid grid-cols-3 gap-3 lg:mt-8 lg:gap-4">
+              <div className="relative z-10 mt-6 grid grid-cols-5 gap-1.5 sm:gap-3 lg:mt-8 lg:gap-4">
                 {MEMBERS.map((n, i) => (
-                  <div key={n} className="card-flat flex flex-col items-center gap-2 px-2 py-4 lg:gap-3 lg:px-3 lg:py-5">
+                  <div key={n} className="card-flat flex flex-col items-center gap-2 px-1 py-3 sm:px-2 sm:py-4 lg:gap-3 lg:px-3 lg:py-5">
                     <span className="relative">
-                      <span className="avatar h-11 w-11 bg-gradient-to-br from-indigo to-cyan text-sm lg:h-14 lg:w-14 lg:text-base">
+                      <span className="avatar h-10 w-10 bg-gradient-to-br from-indigo to-cyan text-sm sm:h-11 sm:w-11 lg:h-14 lg:w-14 lg:text-base">
                         {n[0]}
                       </span>
                       <span
@@ -127,7 +127,7 @@ export default function Home() {
                         }
                       />
                     </span>
-                    <span className="text-xs font-medium text-text-dim lg:text-sm">{n}</span>
+                    <span className="text-[11px] font-medium text-text-dim sm:text-xs lg:text-sm">{n}</span>
                   </div>
                 ))}
               </div>
@@ -135,7 +135,7 @@ export default function Home() {
               <div className="relative z-10 mt-6 lg:mt-8">
                 <div className="flex items-center justify-between text-xs text-text-dim lg:text-sm">
                   <span>Squad progress</span>
-                  <span className="font-semibold text-text">6 / 6 members</span>
+                  <span className="font-semibold text-text">{MEMBERS.length} / {MEMBERS.length} members</span>
                 </div>
                 <div className="progress-track mt-2 lg:mt-3">
                   <div className="progress-fill" style={{ width: "100%" }} />
@@ -162,7 +162,7 @@ export default function Home() {
           </h2>
           <p className="mt-2 max-w-lg text-sm text-text-dim lg:max-w-2xl lg:text-base">
             Every group below is a real matching track — students rating their subjects and
-            getting placed into six-person squads, not a static category page.
+            getting placed into ten-person squads, not a static category page.
           </p>
         </div>
 
@@ -237,7 +237,7 @@ export default function Home() {
           {[
             {
               title: "Matched, not random",
-              desc: "Your subject strengths and gaps decide who joins your six-person squad — everyone covers for everyone.",
+              desc: "Your subject strengths and gaps decide who joins your ten-person squad — everyone covers for everyone.",
               icon: "target",
               accent: "text-cyan",
             },

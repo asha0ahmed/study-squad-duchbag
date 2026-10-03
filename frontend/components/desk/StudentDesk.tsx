@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/squad/StatusBadge";
 import { Avatar } from "@/components/ui/Avatar";
 import { UiIcon, type UiIconName } from "@/components/layout/DockIcons";
 import { useCallback, useEffect, useState } from "react";
+import { SQUAD_SIZE } from "@/lib/squadConfig";
 
 const MEMBERS_NEEDED_TO_ACTIVATE = 4;
 
@@ -138,12 +139,12 @@ export function StudentDesk({ student }: { student: StudentSession }) {
               <div className="card-flat px-4 py-3.5">
                 <p className="text-xs text-text-dim">Squad fill</p>
                 <p className="mt-1 font-display text-lg font-bold text-text">
-                  {memberCount} / 6 members
+                  {memberCount} / {SQUAD_SIZE} members
                 </p>
                 <div className="progress-track mt-2">
                   <div
                     className="progress-fill"
-                    style={{ width: `${Math.min(100, (memberCount / 6) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (memberCount / SQUAD_SIZE) * 100)}%` }}
                   />
                 </div>
               </div>

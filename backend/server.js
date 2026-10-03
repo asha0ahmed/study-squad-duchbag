@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const { rateLimit } = require('express-rate-limit');
 const requireAuth = require('./middleware/auth');
 const { findAutoSquad } = require('./utils/matching');
+const { SQUAD_SIZE } = require('./utils/squadConfig');
 const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind, singleMentorPhotoUpload } = require('./middleware/upload');
 const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
@@ -481,7 +482,7 @@ app.post('/students', registrationLimiter, async (req, res) => {
         const takenSlots = membersResult.rows.map(r => r.slot);
 
         let nextSlot = null;
-        if (takenSlots.length < 6) {
+        if (takenSlots.length < SQUAD_SIZE) {
           nextSlot = 1;
           while (takenSlots.includes(nextSlot)) nextSlot++;
         }
@@ -1460,10 +1461,10 @@ app.post('/students/:id/match', requireAuth, matchingLimiter, async (req, res) =
        WHERE sq.year = $1 AND sq.academic_group = $2 AND sq.aspirant_type = $3
          AND sq.status != 'expired'
        GROUP BY sq.id, sq.created_at
-       HAVING COUNT(sm.id) < 6
+       HAVING COUNT(sm.id) < $4
        ORDER BY COUNT(sm.id) DESC, sq.created_at ASC
        LIMIT 1`,
-      [student.year, student.academic_group, student.aspirant_type]
+      [student.year, student.academic_group, student.aspirant_type, SQUAD_SIZE]
     );
 
     let squad;
@@ -1667,7 +1668,7 @@ app.post('/invites/:inviteCode/join', requireAuth, async (req, res) => {
     );
     const takenSlots = membersResult.rows.map(r => r.slot);
 
-    if (takenSlots.length >= 6) {
+    if (takenSlots.length >= SQUAD_SIZE) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'This squad is already full. Invite link has been used up.' });
     }
@@ -1765,8 +1766,8 @@ app.get('/students/:id/suggested-squad', requireAuth, async (req, res) => {
        WHERE sq.year = $1 AND sq.academic_group = $2 AND sq.aspirant_type = $3
          AND sq.id != $4 AND sq.status != 'expired'
        GROUP BY sq.id
-       HAVING COUNT(sm.id) < 6`,
-      [current.year, current.academic_group, current.aspirant_type, current.squad_id]
+       HAVING COUNT(sm.id) < $5`,
+      [current.year, current.academic_group, current.aspirant_type, current.squad_id, SQUAD_SIZE]
     );
 
     let best = null;
@@ -1827,7 +1828,7 @@ app.post('/students/:id/switch-squad', requireAuth, async (req, res) => {
       [targetSquadId]
     );
     const taken = targetSlotsResult.rows.map((r) => r.slot);
-    if (taken.length >= 6) {
+    if (taken.length >= SQUAD_SIZE) {
       return res.status(400).json({ error: 'That squad is already full.' });
     }
     let nextSlot = 1;

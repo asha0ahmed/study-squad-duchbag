@@ -19,6 +19,7 @@ import { BetterSquadBanner } from "@/components/squad/BetterSquadBanner";
 import { SubscriptionStatus } from "@/components/squad/SubscriptionStatus";
 import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
+import { SQUAD_SIZE } from "@/lib/squadConfig";
 
 const MEMBERS_NEEDED_TO_ACTIVATE = 4;
 
@@ -116,7 +117,7 @@ export default function SquadPage() {
         <div className="card w-full max-w-md px-6 py-10 text-center">
           <UiIcon name="compass" className="h-9 w-9 text-cyan" />
           <p className="mt-3 font-display text-xl font-bold text-text">No squad yet</p>
-          <p className="mt-1.5 text-sm text-text-dim">Head over to find your six-person squad.</p>
+          <p className="mt-1.5 text-sm text-text-dim">Head over to find your ten-person squad.</p>
           <Link href="/squad/find" className="btn btn-primary mt-5 inline-flex">
             Find My Squad
           </Link>
@@ -127,7 +128,7 @@ export default function SquadPage() {
 
   const { squad: squadData, members, mentor } = squad;
   const isActive = squadData.status === "locked";
-  const openSlots = 6 - members.length;
+  const openSlots = SQUAD_SIZE - members.length;
 
   return (
     <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">

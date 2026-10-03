@@ -25,7 +25,7 @@ import { AuthGuard } from "@/components/layout/AuthGuard";
 export const metadata: Metadata = {
   title: "Study Squad",
   description:
-    "Find your study squad — peer-matched six-member study teams for HSC and admission-test aspirants.",
+    "Find your study squad — peer-matched ten-member study teams for HSC and admission-test aspirants.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,5 +1,21 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 9 — Squads hold 10 members
+
+- **Capacity 6 -> 10** via one setting per side: `backend/utils/squadConfig.js`
+  (`SQUAD_SIZE = 10`, used by the 5 "full / has room" checks in `server.js`:
+  invite-at-signup, auto-match open-squad lookup, invite join, suggested-squad
+  query, switch-squad) and `frontend/lib/squadConfig.ts` (progress bar,
+  open-slot count, coverage grid, landing/marketing copy).
+- **Unchanged on purpose:** auto-match still seeds 4 members, a squad still
+  locks / unlocks chat at 4, invite links still allow 2 uses, 48h expiry.
+- No schema change (`squad_members.slot` was never capped at 6).
+- Existing squads: a full 6-member squad now has 2 open slots.
+- Landing preview card shows 10 members (5-column grid); coverage matrix
+  scrolls horizontally at 10 columns.
+- Verified end-to-end against real PostgreSQL 16 (schema + all 15 migrations)
+  with the real backend and Socket.IO (59/59 checks, run 3x on a clean database).
+
 ## Session 8 — Squad Notes: Messenger-style sending + Camera/Gallery menu
 
 - **Optimistic sending.** Messages appear instantly with "Sending…", then
