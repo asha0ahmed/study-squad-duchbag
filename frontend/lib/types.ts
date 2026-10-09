@@ -84,6 +84,7 @@ export interface MentorPublic {
   name: string;
   email: string;
   institution: string;
+  photo_url?: string | null;
 }
 
 // ---- Subjects ----

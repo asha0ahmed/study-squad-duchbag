@@ -2333,7 +2333,7 @@ app.get('/students/:id/squad', requireAuth, async (req, res) => {
     let mentor = null;
     if (squad.mentor_id) {
       const mentorResult = await pool.query(
-        `SELECT id, name, email, institution FROM mentors WHERE id = $1`,
+        `SELECT id, name, email, institution, photo_url FROM mentors WHERE id = $1`,
         [squad.mentor_id]
       );
       mentor = mentorResult.rows[0] || null;
@@ -2434,7 +2434,7 @@ app.get('/squads/:squadId', requireAuth, async (req, res) => {
     let mentor = null;
     if (squad.mentor_id) {
       const mentorResult = await pool.query(
-        `SELECT id, name, email, institution FROM mentors WHERE id = $1`,
+        `SELECT id, name, email, institution, photo_url FROM mentors WHERE id = $1`,
         [squad.mentor_id]
       );
       mentor = mentorResult.rows[0] || null;

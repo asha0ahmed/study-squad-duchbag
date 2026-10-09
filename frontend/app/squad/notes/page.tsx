@@ -14,7 +14,7 @@ import {
   sendSquadMessage,
   StoredSession,
 } from "@/lib/api";
-import type { SquadMessage, SquadMessageType } from "@/lib/types";
+import type { MentorPublic, SquadMessage, SquadMessageType } from "@/lib/types";
 import { getSocket } from "@/lib/socket";
 import { FormError } from "@/components/auth/DossierCard";
 import { Avatar } from "@/components/ui/Avatar";
@@ -302,6 +302,7 @@ function SquadNotesContent() {
   const [session, setSession] = useState<StoredSession | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [access, setAccess] = useState<Access>({ state: "loading" });
+  const [squadMentor, setSquadMentor] = useState<MentorPublic | null>(null);
   const [messages, setMessages] = useState<SquadMessage[]>([]);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -403,6 +404,7 @@ function SquadNotesContent() {
     try {
       if (session.role === "student" && session.student) {
         const result = await getMySquad(session.student.id);
+        setSquadMentor(result.mentor ?? null);
         if (result.squad.status !== "locked") {
           setAccess({
             state: "blocked",
@@ -420,6 +422,7 @@ function SquadNotesContent() {
           return;
         }
         const result = await getSquad(Number(mentorSquadId));
+        setSquadMentor(result.mentor ?? null);
         if (result.squad.status !== "locked") {
           setAccess({ state: "blocked", reason: "This squad isn't locked yet." });
         } else {
@@ -959,19 +962,34 @@ function SquadNotesContent() {
   return (
     <main className="chat-page flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="chat-shell mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
-        <div className="chat-header shrink-0">
-          <p className="eyebrow text-cyan">Squad Notes</p>
-          <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
-            The Ledger
-          </h1>
-          <a
-            href="https://noteviewe.netlify.app"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex w-fit text-sm font-semibold text-cyan underline decoration-cyan/40 underline-offset-4 transition-colors hover:text-text"
-          >
-            Open Note Viewer
-          </a>
+        <div className="chat-header flex shrink-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="eyebrow text-cyan">Squad Notes</p>
+            <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
+              The Ledger
+            </h1>
+            <a
+              href="https://noteviewe.netlify.app"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex w-fit text-sm font-semibold text-cyan underline decoration-cyan/40 underline-offset-4 transition-colors hover:text-text"
+            >
+              Open Note Viewer
+            </a>
+          </div>
+          {squadMentor && (
+            <div className="card flex min-w-0 max-w-[11.5rem] shrink items-center gap-2 px-2 py-2 sm:max-w-[16rem] sm:gap-3 sm:px-3">
+              <Avatar name={squadMentor.name} size="md" photoUrl={squadMentor.photo_url} />
+              <div className="min-w-0">
+                <p className="line-clamp-2 break-words text-sm font-bold leading-tight text-text">
+                  {squadMentor.name}
+                </p>
+                <p className="mt-0.5 line-clamp-2 break-words text-xs leading-tight text-text-dim">
+                  {squadMentor.institution}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div
