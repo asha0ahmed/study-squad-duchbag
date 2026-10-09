@@ -23,9 +23,8 @@ const SECTIONS: Array<{ href: string; icon: UiIconName; title: string; desc: str
   {
     href: "/admin/squads",
     icon: "radio",
-    title: "Squad Monitoring",
-    desc: "Supervise squad activity and mentor coverage.",
-    comingSoon: true,
+    title: "Squads & Exams",
+    desc: "Send a Google Form exam link to a specific squad.",
   },
   {
     href: "/admin/reports",

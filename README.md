@@ -40,6 +40,9 @@ psql -U postgres -d studysquad -f schema.sql
 > For the invited-student 7-day free trial, also run:
 > `psql -U postgres -d studysquad -f migrations/015_add_invite_free_trial.sql`
 
+> For the admin-to-squad exam links, also run:
+> `psql -U postgres -d studysquad -f migrations/016_add_squad_exams.sql`
+
 Start the API (listens on **port 3000**):
 
 ```bash

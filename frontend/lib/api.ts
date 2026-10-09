@@ -38,6 +38,8 @@ import type {
   Student,
   StudentSession,
   StudentSquadView,
+  SquadExam,
+  AdminSquad,
   StudentTaskView,
   SubjectAssessmentInput,
   Task,
@@ -79,7 +81,7 @@ export class ApiError extends Error {
 // Pages that only make sense with a live subscription. When the backend
 // says the trial / subscription has ended, send the student straight to
 // the Subscribe page (More -> Subscribe) to buy a plan.
-const SUBSCRIPTION_GATED_PATHS = ["/tasks", "/squad/notes"];
+const SUBSCRIPTION_GATED_PATHS = ["/tasks", "/squad/notes", "/squad/exam"];
 
 function redirectIfSubscriptionEnded() {
   if (typeof window === "undefined") return;
@@ -449,6 +451,35 @@ export function getMySquad(studentId: number) {
 
 export function getSquad(squadId: number) {
   return request<SquadDetailView>(`/squads/${squadId}`);
+}
+
+export function getSquadExam(squadId: number) {
+  return request<{ exam: SquadExam | null }>(`/squads/${squadId}/exam`);
+}
+
+export function adminListSquads(secret: string) {
+  return request<AdminSquad[]>("/admin/squads", { skipAuth: true, adminSecret: secret });
+}
+
+export function adminSetSquadExam(
+  secret: string,
+  squadId: number,
+  input: { url: string; message: string }
+) {
+  return request<SquadExam>(`/admin/squads/${squadId}/exam`, {
+    method: "PATCH",
+    body: input,
+    skipAuth: true,
+    adminSecret: secret,
+  });
+}
+
+export function adminRemoveSquadExam(secret: string, squadId: number) {
+  return request<{ removed: boolean }>(`/admin/squads/${squadId}/exam`, {
+    method: "DELETE",
+    skipAuth: true,
+    adminSecret: secret,
+  });
 }
 
 // ---- Mentor-fee subscription payments ----

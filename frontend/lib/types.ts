@@ -441,3 +441,26 @@ export interface ApiErrorBody {
   error: string;
   subscriptionExpired?: boolean;
 }
+
+// ---- Squad exam link (admin -> squad) ----
+
+export interface SquadExam {
+  message: string;
+  url: string;
+  updated_at: string;
+}
+
+/** Row from GET /admin/squads. */
+export interface AdminSquad {
+  id: number;
+  academic_group: AcademicGroup;
+  year: string;
+  aspirant_type: string;
+  status: SquadStatus;
+  created_at: string;
+  mentor_name: string | null;
+  member_count: number;
+  exam_url: string | null;
+  exam_message: string | null;
+  exam_updated_at: string | null;
+}

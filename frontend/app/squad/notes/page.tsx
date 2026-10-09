@@ -968,16 +968,14 @@ function SquadNotesContent() {
             <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
               The Ledger
             </h1>
-            <a
-              href="https://noteviewe.netlify.app"
-              target="_blank"
-              rel="noreferrer"
+            <Link
+              href={session.role === "mentor" && mentorSquadId ? `/squad/exam?squadId=${mentorSquadId}` : "/squad/exam"}
               className="mt-2 inline-flex w-fit text-sm font-semibold text-cyan underline decoration-cyan/40 underline-offset-4 transition-colors hover:text-text"
             >
-              Open Note Viewer
-            </a>
+              Open Exam
+            </Link>
           </div>
-          {squadMentor && (
+          {squadMentor ? (
             <div className="card flex min-w-0 max-w-[11.5rem] shrink items-center gap-2 px-2 py-2 sm:max-w-[16rem] sm:gap-3 sm:px-3">
               <Avatar name={squadMentor.name} size="md" photoUrl={squadMentor.photo_url} />
               <div className="min-w-0">
@@ -986,6 +984,22 @@ function SquadNotesContent() {
                 </p>
                 <p className="mt-0.5 line-clamp-2 break-words text-xs leading-tight text-text-dim">
                   {squadMentor.institution}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="card flex min-w-0 max-w-[11.5rem] shrink items-center gap-2 px-2 py-2 sm:max-w-[16rem] sm:gap-3 sm:px-3">
+              <span
+                aria-hidden="true"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-dashed border-border bg-white/[0.03] text-text-faint"
+              >
+                <UiIcon name="user" className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold leading-tight text-text">Mentor</p>
+                <span className="badge badge-amber mt-1">Pending</span>
+                <p className="mt-1 line-clamp-2 text-xs leading-tight text-text-dim">
+                  Not assigned yet
                 </p>
               </div>
             </div>

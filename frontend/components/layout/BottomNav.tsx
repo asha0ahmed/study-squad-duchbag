@@ -213,10 +213,10 @@ export function BottomNav() {
       },
       {
         key: "note",
-        href: "https://noteviewe.netlify.app",
-        label: "Note",
+        href: "/squad/exam",
+        label: "Exam",
         icon: ExamIcon,
-        match: () => false,
+        match: (p) => p === "/squad/exam",
       },
       {
         key: "more",

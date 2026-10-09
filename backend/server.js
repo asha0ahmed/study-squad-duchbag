@@ -2391,6 +2391,132 @@ app.get('/mentors/my-squads', requireAuth, async (req, res) => {
 });
 
 
+// ---- Squad exam link (admin sends a Google Form link to a squad) ----
+
+function normalizeExamUrl(raw) {
+  const value = String(raw || '').trim();
+  if (!value || value.length > 1000) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+app.get('/admin/squads', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT sq.id, sq.academic_group, sq.year, sq.aspirant_type, sq.status, sq.created_at,
+              m.name AS mentor_name,
+              (SELECT COUNT(*)::int FROM squad_members sm WHERE sm.squad_id = sq.id) AS member_count,
+              ex.url AS exam_url, ex.message AS exam_message, ex.updated_at AS exam_updated_at
+       FROM squads sq
+       LEFT JOIN mentors m ON m.id = sq.mentor_id
+       LEFT JOIN squad_exams ex ON ex.squad_id = sq.id
+       ORDER BY sq.id DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading squads.' });
+  }
+});
+
+app.patch('/admin/squads/:squadId/exam', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const squadId = parseInt(req.params.squadId);
+  const url = normalizeExamUrl(req.body?.url);
+  const message = String(req.body?.message || '').trim().slice(0, 2000);
+
+  if (!url) {
+    return res.status(400).json({ error: 'Enter a valid exam link starting with http:// or https://.' });
+  }
+
+  try {
+    const squadResult = await pool.query('SELECT id FROM squads WHERE id = $1', [squadId]);
+    if (squadResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Squad not found.' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO squad_exams (squad_id, message, url, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (squad_id)
+       DO UPDATE SET message = EXCLUDED.message, url = EXCLUDED.url, updated_at = NOW()
+       RETURNING squad_id, message, url, updated_at`,
+      [squadId, message, url]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong saving the exam link.' });
+  }
+});
+
+app.delete('/admin/squads/:squadId/exam', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  try {
+    await pool.query('DELETE FROM squad_exams WHERE squad_id = $1', [parseInt(req.params.squadId)]);
+    res.json({ removed: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong removing the exam link.' });
+  }
+});
+
+// Members of the squad (and its mentor) can read the exam link sent to it.
+// Students need an active paid plan or their 7-day invite trial; expired
+// students get 402 subscriptionExpired (same rule as Squad Notes and Tasks).
+app.get('/squads/:squadId/exam', requireAuth, requireActiveSubscription, async (req, res) => {
+  const squadId = parseInt(req.params.squadId);
+
+  try {
+    const squadResult = await pool.query('SELECT id, mentor_id FROM squads WHERE id = $1', [squadId]);
+    if (squadResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Squad not found.' });
+    }
+
+    let isAuthorized = false;
+    if (req.mentor?.mentorId && req.mentor.mentorId === squadResult.rows[0].mentor_id) {
+      isAuthorized = true;
+    } else if (req.student?.studentId) {
+      const memberCheck = await pool.query(
+        'SELECT 1 FROM squad_members WHERE squad_id = $1 AND student_id = $2',
+        [squadId, req.student.studentId]
+      );
+      isAuthorized = memberCheck.rows.length > 0;
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'You are not authorized to view this squad.' });
+    }
+
+    const examResult = await pool.query(
+      'SELECT message, url, updated_at FROM squad_exams WHERE squad_id = $1',
+      [squadId]
+    );
+    res.json({ exam: examResult.rows[0] || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong loading the exam.' });
+  }
+});
+
 app.get('/squads/:squadId', requireAuth, async (req, res) => {
   const squadId = parseInt(req.params.squadId);
 

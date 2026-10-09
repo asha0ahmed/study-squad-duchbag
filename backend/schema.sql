@@ -255,3 +255,11 @@ CREATE TABLE admin_reminders (
 
 CREATE INDEX idx_admin_reminders_student ON admin_reminders(student_id);
 CREATE INDEX idx_admin_reminders_unseen ON admin_reminders(student_id) WHERE seen_at IS NULL;
+
+-- Exam link (Google Form) the admin sends to a specific squad.
+CREATE TABLE IF NOT EXISTS squad_exams (
+  squad_id INTEGER PRIMARY KEY REFERENCES squads(id),
+  message TEXT NOT NULL DEFAULT '',
+  url VARCHAR(1000) NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
