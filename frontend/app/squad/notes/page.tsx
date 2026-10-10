@@ -962,10 +962,10 @@ function SquadNotesContent() {
   return (
     <main className="chat-page flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="chat-shell mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
-        <div className="chat-header flex shrink-0 items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="chat-header flex shrink-0 items-stretch justify-between gap-3">
+          <div className="shrink-0">
             <p className="eyebrow text-cyan">Squad Notes</p>
-            <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-text">
+            <h1 className="mt-1 whitespace-nowrap font-display text-3xl font-extrabold tracking-tight text-text">
               The Ledger
             </h1>
             <Link
@@ -975,35 +975,37 @@ function SquadNotesContent() {
               Open Exam
             </Link>
           </div>
-          {squadMentor ? (
-            <div className="card flex min-w-0 max-w-[11.5rem] shrink items-center gap-2 px-2 py-2 sm:max-w-[16rem] sm:gap-3 sm:px-3">
-              <Avatar name={squadMentor.name} size="md" photoUrl={squadMentor.photo_url} />
-              <div className="min-w-0">
-                <p className="line-clamp-2 break-words text-sm font-bold leading-tight text-text">
-                  {squadMentor.name}
-                </p>
-                <p className="mt-0.5 line-clamp-2 break-words text-xs leading-tight text-text-dim">
-                  {squadMentor.institution}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="card flex min-w-0 max-w-[11.5rem] shrink items-center gap-2 px-2 py-2 sm:max-w-[16rem] sm:gap-3 sm:px-3">
-              <span
-                aria-hidden="true"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-dashed border-border bg-white/[0.03] text-text-faint"
-              >
-                <UiIcon name="user" className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-bold leading-tight text-text">Mentor</p>
-                <span className="badge badge-amber mt-1">Pending</span>
-                <p className="mt-1 line-clamp-2 text-xs leading-tight text-text-dim">
-                  Not assigned yet
-                </p>
-              </div>
-            </div>
-          )}
+          {/* Mentor card: fills the free space right of the title and never taller than the title block, so the header height (and the chat box) stay exactly as before. */}
+          <div className="card ml-auto flex min-w-0 max-w-[16rem] flex-1 items-center gap-2 overflow-hidden px-2 py-1.5">
+            {squadMentor ? (
+              <>
+                <div className="shrink-0">
+                  <Avatar name={squadMentor.name} size="md" photoUrl={squadMentor.photo_url} />
+                </div>
+                <div className="min-w-0">
+                  <p className="line-clamp-2 break-words text-xs font-bold leading-tight text-text">
+                    {squadMentor.name}
+                  </p>
+                  <p className="mt-0.5 line-clamp-1 break-words text-[11px] leading-tight text-text-dim">
+                    {squadMentor.institution}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-dashed border-border bg-white/[0.03] text-text-faint"
+                >
+                  <UiIcon name="user" className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold leading-tight text-text">Mentor</p>
+                  <span className="badge badge-amber mt-1 !px-2 !py-0.5 !text-[10px]">Pending</span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div
