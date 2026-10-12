@@ -64,7 +64,7 @@ function StudentLoginForm() {
             href={inviteCode ? `/auth/student/signup?inviteCode=${inviteCode}` : "/auth/student/signup"}
             className="font-semibold text-cyan underline underline-offset-2"
           >
-            Start your dossier
+            Start your journey
           </Link>
         </p>
         <p className="mt-2 text-center text-sm text-text-faint">

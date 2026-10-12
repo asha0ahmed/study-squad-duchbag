@@ -937,7 +937,7 @@ function SquadNotesContent() {
   if (!sessionChecked || !session || needsProfiler(session) || access.state === "loading") {
     return (
       <main className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-text-dim">Opening Squad Notes…</p>
+        <p className="text-sm text-text-dim">Opening Squad Chats…</p>
       </main>
     );
   }

@@ -212,7 +212,7 @@ function MySquadsTab({ squads }: { squads: MentorSquad[] }) {
                 Upload Task
               </Link>
               <Link href={`/squad/notes?squadId=${squad.id}`} className="btn btn-secondary !py-2 text-sm">
-                Squad Notes
+                Squad Chats
               </Link>
             </div>
           </div>

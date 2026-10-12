@@ -250,7 +250,7 @@ export default function SquadPage() {
 
         {isActive && (
           <Link href="/squad/notes" className="btn btn-primary mt-8 inline-flex">
-            Open Squad Notes
+            Open Squad Chats
           </Link>
         )}
       </div>
