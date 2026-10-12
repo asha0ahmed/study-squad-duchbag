@@ -947,7 +947,7 @@ function SquadNotesContent() {
     return (
       <main className="flex flex-1 items-center justify-center px-6 py-16">
         <div className="card w-full max-w-md px-6 py-8 text-center">
-          <p className="eyebrow text-cyan">Squad Notes</p>
+          <p className="eyebrow text-cyan">Squad Chat Box</p>
           <p className="mt-3 text-sm text-text-dim">{message}</p>
           <Link href="/squad" className="btn btn-secondary mt-5 inline-flex">
             Back to Your Squad
