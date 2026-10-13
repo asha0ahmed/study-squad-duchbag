@@ -58,7 +58,7 @@ export function SubscriptionStatus({ studentId }: { studentId: number }) {
               ? `Your free trial ${time.label.toLowerCase()}.`
               : `Your subscription ${time.label.toLowerCase()}.`}{" "}
           {expired
-            ? "Renew to get your squad, notes and tasks back."
+            ? "Renew to get your squad, chats and tasks back."
             : "Subscribe now to keep your squad access uninterrupted."}
         </p>
         <Link href="/squad/subscribe" className="btn btn-danger mt-3.5 inline-flex !py-2 text-sm">

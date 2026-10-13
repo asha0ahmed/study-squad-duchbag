@@ -137,7 +137,7 @@ function SubscriptionSummary({ subscription }: { subscription: SubscriptionInfo 
       )}
       {subscription.status === "expired" && (
         <p className="mt-1 text-xs text-text-dim">
-          Buy a plan below to get your squad, notes and tasks back.
+          Buy a plan below to get your squad, chats and tasks back.
         </p>
       )}
     </div>

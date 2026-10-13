@@ -1028,16 +1028,16 @@ function SquadChatsContent() {
           {messages.length === 0 && outbox.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
               <UiIcon name="message" className="h-7 w-7 text-text-faint" />
-              <p className="text-sm text-text-faint">No notes yet. Say hello.</p>
+              <p className="text-sm text-text-faint">No conversations yet. Say hello.</p>
             </div>
           ) : (
             <div className="divide-y divide-border-soft">
               {loadingOlder && (
-                <p className="py-2 text-center text-xs text-text-faint">Loading older notes…</p>
+                <p className="py-2 text-center text-xs text-text-faint">Loading older conversations…</p>
               )}
               {!hasMoreOlder && (
                 <p className="py-2 text-center text-xs text-text-faint">
-                  You&apos;ve reached the start of this squad&apos;s notes.
+                  You&apos;ve reached the start of this squad&apos;s conversations.
                 </p>
               )}
               {messages.map((m) => {

@@ -330,7 +330,7 @@ export function BottomNav() {
 
               {profileIncomplete && (
                 <p className="mt-2 text-center text-xs text-text-faint">
-                  Finish this to unlock your squad, notes, and subscription.
+                  Finish this to unlock your squad, squad chats, and subscription.
                 </p>
               )}
 
