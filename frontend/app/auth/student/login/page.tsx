@@ -54,6 +54,14 @@ function StudentLoginForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          <div className="-mt-1 text-right">
+            <Link
+              href="/auth/forgot-password?role=student"
+              className="text-sm text-text-dim underline underline-offset-2"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <FormError message={error} />
           <SubmitButton loading={loading}>Sign In</SubmitButton>
         </form>

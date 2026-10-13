@@ -46,6 +46,11 @@ psql -U postgres -d studysquad -f schema.sql
 > For the public Squad ID (random 2-3 digit number shown in chats), also run:
 > `psql -U postgres -d studysquad -f migrations/017_add_squad_public_code.sql`
 
+> For forgot-password, also run:
+> `psql -U postgres -d studysquad -f migrations/018_add_password_resets.sql`
+> then set `FRONTEND_URL` and the `SMTP_*` / `MAIL_FROM` values in `.env`
+> (see `.env.example`), and run `npm install` (adds `nodemailer`).
+
 Start the API (listens on **port 3000**):
 
 ```bash

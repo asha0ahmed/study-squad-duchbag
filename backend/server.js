@@ -5,12 +5,14 @@ const { Server: SocketIOServer } = require('socket.io');
 const pool = require('./db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { rateLimit } = require('express-rate-limit');
 const requireAuth = require('./middleware/auth');
 const { findAutoSquad } = require('./utils/matching');
 const { SQUAD_SIZE } = require('./utils/squadConfig');
 const { singleFileUpload, singleChatAttachmentUpload, chatAttachmentKind, singleMentorPhotoUpload } = require('./middleware/upload');
 const { uploadBuffer } = require('./utils/cloudinary');
+const { sendPasswordResetEmail } = require('./utils/mailer');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -80,6 +82,14 @@ const matchingLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.MATCHING_RATE_LIMIT || 100),
 });
+const forgotPasswordLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000,
+  limit: Number(process.env.FORGOT_PASSWORD_RATE_LIMIT || 5),
+});
+const resetPasswordLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.AUTH_RATE_LIMIT || 10),
+});
 
 // Without this, every request from the frontend (a different origin --
 // e.g. localhost:3001 -- than this server's localhost:3000) is blocked by
@@ -103,11 +113,22 @@ app.use(apiLimiter);
 // traffic isn't). Membership is re-checked on every `join_squad`, exactly
 // like the REST GET endpoint below re-checks it on every request -- a
 // socket can't be used to read a squad's chat just by guessing its id.
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('No token provided.'));
   try {
-    socket.decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Tokens issued before a password reset must stop working here too.
+    const isMentor = decoded.role === 'mentor';
+    const changed = await pool.query(
+      `SELECT password_changed_at FROM ${isMentor ? 'mentors' : 'students'} WHERE id = $1`,
+      [isMentor ? decoded.mentorId : decoded.studentId]
+    );
+    const changedAt = changed.rows[0]?.password_changed_at;
+    if (changedAt && decoded.iat < Math.floor(new Date(changedAt).getTime() / 1000)) {
+      return next(new Error('Invalid or expired token.'));
+    }
+    socket.decoded = decoded;
     next();
   } catch {
     next(new Error('Invalid or expired token.'));
@@ -2691,6 +2712,190 @@ app.post('/login', authLimiter, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong logging in.' });
+  }
+});
+
+// ---- Forgot password / reset password ----
+// Flow: POST /auth/forgot-password emails a one-time link containing a random
+// token; POST /auth/reset-password consumes it and sets a new password.
+// Only the SHA-256 hash of a token is stored (password_resets.token_hash).
+// Students without an email on file (phone-only signups) can't receive the
+// email, so an admin can issue a link for them: POST /admin/students/:id/reset-link.
+const RESET_TTL_MINUTES = Number(process.env.PASSWORD_RESET_TTL_MINUTES) || 60;
+const ADMIN_RESET_TTL_MINUTES = 24 * 60;
+
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function buildResetLink(token) {
+  const base = (process.env.FRONTEND_URL || 'http://localhost:3001').replace(/\/+$/, '');
+  return `${base}/auth/reset-password?token=${token}`;
+}
+
+// Creates a fresh token for one account and invalidates that account's
+// earlier unused ones. Returns the raw token (only ever sent to the owner).
+async function createPasswordResetToken(userType, userId, ttlMinutes) {
+  const token = crypto.randomBytes(32).toString('hex');
+  await pool.query(
+    `UPDATE password_resets SET used_at = NOW()
+     WHERE user_type = $1 AND user_id = $2 AND used_at IS NULL`,
+    [userType, userId]
+  );
+  await pool.query(
+    `INSERT INTO password_resets (user_type, user_id, token_hash, expires_at)
+     VALUES ($1, $2, $3, NOW() + ($4 || ' minutes')::interval)`,
+    [userType, userId, hashResetToken(token), String(ttlMinutes)]
+  );
+  return token;
+}
+
+app.post('/auth/forgot-password', forgotPasswordLimiter, async (req, res) => {
+  const identifier = typeof req.body?.identifier === 'string' ? req.body.identifier.trim() : '';
+  const role = req.body?.role === 'mentor' ? 'mentor' : 'student';
+
+  if (!identifier) {
+    return res.status(400).json({ error: 'Please enter your email or phone number.' });
+  }
+
+  // Same answer whether or not an account exists, so this endpoint can't be
+  // used to discover who is registered.
+  const genericReply = {
+    message: 'If an account matches, a password reset link has been sent to its email address.',
+  };
+
+  try {
+    let account = null;
+    if (role === 'mentor') {
+      const r = await pool.query(
+        `SELECT id, name, email FROM mentors
+         WHERE LOWER(email) = LOWER($1)
+         ORDER BY (email = $1) DESC LIMIT 1`,
+        [identifier]
+      );
+      account = r.rows[0] || null;
+    } else {
+      const r = identifier.includes('@')
+        ? await pool.query(
+            `SELECT id, name, email FROM students
+             WHERE LOWER(email) = LOWER($1) AND status = 'active'
+             ORDER BY (email = $1) DESC LIMIT 1`,
+            [identifier]
+          )
+        : await pool.query(
+            `SELECT id, name, email FROM students WHERE phone = $1 AND status = 'active'`,
+            [normalizePhone(identifier)]
+          );
+      account = r.rows[0] || null;
+    }
+
+    if (account && account.email) {
+      // One link per account per minute, so the endpoint can't be used to
+      // flood someone's inbox.
+      const recent = await pool.query(
+        `SELECT 1 FROM password_resets
+         WHERE user_type = $1 AND user_id = $2 AND created_at > NOW() - INTERVAL '60 seconds'`,
+        [role, account.id]
+      );
+      if (recent.rows.length === 0) {
+        const token = await createPasswordResetToken(role, account.id, RESET_TTL_MINUTES);
+        // Not awaited: the response time is the same for every request.
+        sendPasswordResetEmail({
+          to: account.email,
+          name: account.name,
+          link: buildResetLink(token),
+          minutes: RESET_TTL_MINUTES,
+        }).catch((err) => console.error('Failed to send password reset email:', err.message));
+      }
+    }
+
+    res.json(genericReply);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+app.post('/auth/reset-password', resetPasswordLimiter, async (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+  if (!token || !password) {
+    return res.status(400).json({ error: 'A reset link and a new password are required.' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // FOR UPDATE: two simultaneous requests can't both use the same link.
+    const found = await client.query(
+      `SELECT id, user_type, user_id FROM password_resets
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+       FOR UPDATE`,
+      [hashResetToken(token)]
+    );
+    if (found.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+    }
+
+    const reset = found.rows[0];
+    const table = reset.user_type === 'mentor' ? 'mentors' : 'students';
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const updated = await client.query(
+      `UPDATE ${table} SET password_hash = $1, password_changed_at = NOW()
+       WHERE id = $2 RETURNING id`,
+      [passwordHash, reset.user_id]
+    );
+    if (updated.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+    }
+
+    await client.query(
+      `UPDATE password_resets SET used_at = NOW()
+       WHERE user_type = $1 AND user_id = $2 AND used_at IS NULL`,
+      [reset.user_type, reset.user_id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Password updated. You can now sign in.', role: reset.user_type });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong resetting your password.' });
+  } finally {
+    client.release();
+  }
+});
+
+// Admin: make a reset link for a student (mainly phone-only students, who
+// can't receive the email). The admin passes the link to the student.
+app.post('/admin/students/:id/reset-link', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  try {
+    const student = await pool.query('SELECT id, status FROM students WHERE id = $1', [req.params.id]);
+    if (student.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found.' });
+    }
+    if (student.rows[0].status === 'removed') {
+      return res.status(400).json({ error: 'This student has been removed. Restore access first.' });
+    }
+
+    const token = await createPasswordResetToken('student', student.rows[0].id, ADMIN_RESET_TTL_MINUTES);
+    res.status(201).json({ link: buildResetLink(token), expires_in_minutes: ADMIN_RESET_TTL_MINUTES });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong creating the reset link.' });
   }
 });
 

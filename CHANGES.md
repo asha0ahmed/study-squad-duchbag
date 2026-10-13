@@ -1,5 +1,27 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 11 — Forgot password
+
+- **Flow.** "Forgot password?" on the student and mentor sign-in pages ->
+  `/auth/forgot-password` -> emailed one-time link -> `/auth/reset-password`.
+  Endpoints: `POST /auth/forgot-password`, `POST /auth/reset-password`.
+- **Safe by design.** Same reply whether or not the account exists; token is
+  32 random bytes, only its SHA-256 hash is stored; link works once and
+  expires (`PASSWORD_RESET_TTL_MINUTES`, default 60); a new request cancels
+  older links; max 1 email/minute per account; 5 requests/hour per IP.
+- **Resetting signs everyone out.** `password_changed_at` is set, and any
+  login token (REST and Socket.IO) issued before it is rejected.
+- **Phone-only students** can't receive email: Admin -> Students has a new
+  "Reset password link" button (`POST /admin/students/:id/reset-link`, valid
+  24h) to hand the link to them.
+- **Email** is sent over SMTP via `nodemailer` (`utils/mailer.js`). In
+  development with no SMTP set, the link is printed in the server terminal.
+- **Action required:** run `backend/migrations/018_add_password_resets.sql`,
+  `npm install` in `backend/`, set `FRONTEND_URL` + SMTP values in `.env`.
+- Verified on PostgreSQL 16: unknown email gets the same reply, reuse /
+  expired / bad tokens rejected, old sessions rejected after reset, mentor
+  and admin flows, rate limit. Frontend `tsc --noEmit` and `eslint` clean.
+
 ## Session 10 — Public Squad ID, "Squad Chats" rename, admin can read every chat
 
 - **Squad ID shown to everyone.** New `squads.public_code` = random, unique

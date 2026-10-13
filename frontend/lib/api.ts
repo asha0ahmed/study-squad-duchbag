@@ -398,6 +398,24 @@ export async function loginMentor(email: string, password: string) {
   return result;
 }
 
+/** Asks the backend to email a password reset link. Always succeeds the same way, whether or not the account exists. */
+export function requestPasswordReset(identifier: string, role: SessionRole) {
+  return request<{ message: string }>("/auth/forgot-password", {
+    method: "POST",
+    body: { identifier, role },
+    skipAuth: true,
+  });
+}
+
+/** Sets a new password using the token from the emailed (or admin-issued) link. */
+export function resetPassword(token: string, password: string) {
+  return request<{ message: string; role: SessionRole }>("/auth/reset-password", {
+    method: "POST",
+    body: { token, password },
+    skipAuth: true,
+  });
+}
+
 /**
  * Upload (or replace) the logged-in mentor's own profile photo. Scoped
  * server-side to the authenticated mentor's own record -- there's no
@@ -776,4 +794,12 @@ export function rateSubmission(submissionId: number, rating: number, feedback?: 
     method: "PATCH",
     body: { rating, feedback: feedback || undefined },
   });
+}
+
+/** Makes a password reset link for a student (e.g. phone-only students who can't get the email). */
+export function adminCreateStudentResetLink(secret: string, studentId: number) {
+  return request<{ link: string; expires_in_minutes: number }>(
+    `/admin/students/${studentId}/reset-link`,
+    { method: "POST", skipAuth: true, adminSecret: secret }
+  );
 }

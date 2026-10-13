@@ -4,6 +4,7 @@ import { UiIcon } from "@/components/layout/DockIcons";
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
+  adminCreateStudentResetLink,
   adminListStudents,
   adminRemoveStudent,
   adminRestoreStudent,
@@ -285,6 +286,37 @@ function StudentCard({
   onRemove: () => void;
   onRestore: () => void;
 }) {
+  const [resetLink, setResetLink] = useState<string | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleResetLink() {
+    const secret = getAdminSecret();
+    if (!secret) return;
+    setResetBusy(true);
+    setResetError(null);
+    setCopied(false);
+    try {
+      const result = await adminCreateStudentResetLink(secret, student.id);
+      setResetLink(result.link);
+    } catch (err) {
+      setResetError(err instanceof ApiError ? err.message : "Couldn't create the reset link.");
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
+  async function handleCopy() {
+    if (!resetLink) return;
+    try {
+      await navigator.clipboard.writeText(resetLink);
+      setCopied(true);
+    } catch {
+      // Clipboard can be blocked; the link is selectable in the box anyway.
+    }
+  }
+
   return (
     <div className="card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -356,7 +388,30 @@ function StudentCard({
         )}
       </div>
 
-      <div className="mt-4 flex justify-end border-t border-border-soft pt-4">
+      {resetLink && (
+        <div className="mt-4 rounded-xl border border-border-soft p-3">
+          <p className="text-xs text-text-faint">
+            Password reset link (valid 24 hours, works once). Send it to the student yourself.
+          </p>
+          <input
+            readOnly
+            value={resetLink}
+            onFocus={(e) => e.currentTarget.select()}
+            className="input mt-2 w-full text-xs"
+          />
+          <button onClick={handleCopy} className="btn btn-ghost mt-2 !py-1.5 text-sm">
+            {copied ? "Copied" : "Copy link"}
+          </button>
+        </div>
+      )}
+      {resetError && <p className="mt-3 text-sm text-coral">{resetError}</p>}
+
+      <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border-soft pt-4">
+        {student.status !== "removed" && (
+          <button onClick={handleResetLink} disabled={resetBusy} className="btn btn-ghost !py-2 text-sm">
+            {resetBusy ? "Creating…" : "Reset password link"}
+          </button>
+        )}
         {student.status === "removed" ? (
           <button onClick={onRestore} disabled={acting} className="btn btn-success !py-2 text-sm">
             Restore access

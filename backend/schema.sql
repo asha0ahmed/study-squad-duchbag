@@ -295,3 +295,19 @@ CREATE TABLE IF NOT EXISTS squad_exams (
   url VARCHAR(1000) NOT NULL,
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Forgot-password support (same as migrations/018_add_password_resets.sql).
+-- Only a SHA-256 hash of each reset token is stored.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id SERIAL PRIMARY KEY,
+  user_type VARCHAR(10) NOT NULL CHECK (user_type IN ('student', 'mentor')),
+  user_id INTEGER NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user
+  ON password_resets(user_type, user_id);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+ALTER TABLE mentors  ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
