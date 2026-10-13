@@ -373,11 +373,11 @@ export function BottomNav() {
               )}
 
               {/* Kept in sync with the Note dock item's own unread dot --
-                  surfaced again here since Squad Notes' readiness state is
+                  surfaced again here since Squad Chats' readiness state is
                   useful context next to the rest of the squad's status. */}
               {isStudent && !profileIncomplete && studentSquad && !notesReady && (
                 <p className="mt-3 px-1.5 text-center text-xs text-text-faint">
-                  Squad Notes unlock once your squad is active.
+                  Squad Chats unlock once your squad is active.
                 </p>
               )}
             </div>

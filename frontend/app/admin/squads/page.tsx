@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FormError } from "@/components/auth/DossierCard";
 import { UiIcon } from "@/components/layout/DockIcons";
@@ -75,7 +76,7 @@ function SquadExamCard({
     <article className="card px-5 py-5 sm:px-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
         <div>
-          <h2 className="font-display text-lg font-bold text-text">Squad #{squad.id}</h2>
+          <h2 className="font-display text-lg font-bold text-text">Squad ID {squad.public_code}</h2>
           <p className="text-xs text-text-faint">
             {squad.academic_group} · {squad.year} · {squad.aspirant_type}
           </p>
@@ -84,6 +85,12 @@ function SquadExamCard({
           <span className="badge badge-neutral">{squad.status}</span>
           <span>{squad.member_count} members</span>
           <span>Mentor: {squad.mentor_name ?? "none yet"}</span>
+          <Link
+            href={`/admin/squads/chat?squadId=${squad.id}`}
+            className="btn btn-secondary !px-3 !py-1.5 text-xs"
+          >
+            Open Chat
+          </Link>
         </div>
       </div>
 
@@ -171,7 +178,7 @@ export default function AdminSquadsPage() {
       if (onlyLocked && s.status !== "locked") return false;
       if (!q) return true;
       return (
-        String(s.id) === q.replace("#", "") ||
+        String(s.public_code) === q.replace(/^(squad\s*)?(id\s*)?#?/, "") ||
         s.academic_group.toLowerCase().includes(q) ||
         s.year.toLowerCase().includes(q) ||
         s.aspirant_type.toLowerCase().includes(q) ||
@@ -201,7 +208,7 @@ export default function AdminSquadsPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by squad #, group, year, or mentor"
+            placeholder="Search by Squad ID, group, year, or mentor"
             className="input sm:max-w-sm"
           />
           <label className="flex items-center gap-2 text-sm text-text-dim">

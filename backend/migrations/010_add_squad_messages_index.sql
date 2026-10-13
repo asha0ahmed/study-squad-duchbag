@@ -1,4 +1,4 @@
--- Chat performance: index for Squad Notes pagination and polling.
+-- Chat performance: index for Squad Chats pagination and polling.
 --
 -- GET /squads/:squadId/messages now serves three access patterns instead
 -- of "give me the whole history every time":

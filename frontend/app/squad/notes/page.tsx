@@ -1,5 +1,6 @@
 "use client";
 
+import { SquadIdBadge } from "@/components/squad/SquadIdBadge";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -294,7 +295,7 @@ const MessageRow = memo(function MessageRow({
   );
 });
 
-function SquadNotesContent() {
+function SquadChatsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mentorSquadId = searchParams.get("squadId");
@@ -303,6 +304,7 @@ function SquadNotesContent() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [access, setAccess] = useState<Access>({ state: "loading" });
   const [squadMentor, setSquadMentor] = useState<MentorPublic | null>(null);
+  const [squadCode, setSquadCode] = useState<number | null>(null);
   const [messages, setMessages] = useState<SquadMessage[]>([]);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -405,10 +407,11 @@ function SquadNotesContent() {
       if (session.role === "student" && session.student) {
         const result = await getMySquad(session.student.id);
         setSquadMentor(result.mentor ?? null);
+        setSquadCode(result.squad.public_code ?? null);
         if (result.squad.status !== "locked") {
           setAccess({
             state: "blocked",
-            reason: "Squad Notes unlocks once your squad reaches 4 members.",
+            reason: "Squad Chats unlocks once your squad reaches 4 members.",
           });
         } else {
           setAccess({ state: "ready", squadId: result.squad.id });
@@ -417,12 +420,13 @@ function SquadNotesContent() {
         if (!mentorSquadId) {
           setAccess({
             state: "blocked",
-            reason: "Open Squad Notes from one of your assigned squads.",
+            reason: "Open Squad Chats from one of your assigned squads.",
           });
           return;
         }
         const result = await getSquad(Number(mentorSquadId));
         setSquadMentor(result.mentor ?? null);
+        setSquadCode(result.squad.public_code ?? null);
         if (result.squad.status !== "locked") {
           setAccess({ state: "blocked", reason: "This squad isn't locked yet." });
         } else {
@@ -432,7 +436,7 @@ function SquadNotesContent() {
     } catch (err) {
       setAccess({
         state: "error",
-        message: err instanceof ApiError ? err.message : "Couldn't load Squad Notes.",
+        message: err instanceof ApiError ? err.message : "Couldn't load Squad Chats.",
       });
     }
   }, [session, mentorSquadId]);
@@ -964,7 +968,15 @@ function SquadNotesContent() {
       <div className="chat-shell mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
         <div className="chat-header flex shrink-0 items-stretch justify-between gap-3">
           <div className="shrink-0">
-            <p className="eyebrow text-cyan">Squad Notes</p>
+            <p className="eyebrow whitespace-nowrap text-cyan">
+              Squad Chats
+              {squadCode !== null && (
+                <>
+                  {" · "}
+                  <SquadIdBadge code={squadCode} prefix="ID" />
+                </>
+              )}
+            </p>
             <h1 className="mt-1 whitespace-nowrap font-display text-3xl font-extrabold tracking-tight text-text">
               The Ledger
             </h1>
@@ -1174,16 +1186,16 @@ function SquadNotesContent() {
   );
 }
 
-export default function SquadNotesPage() {
+export default function SquadChatsPage() {
   return (
     <Suspense
       fallback={
         <main className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-text-dim">Opening Squad Notes…</p>
+          <p className="text-sm text-text-dim">Opening Squad Chats…</p>
         </main>
       }
     >
-      <SquadNotesContent />
+      <SquadChatsContent />
     </Suspense>
   );
 }

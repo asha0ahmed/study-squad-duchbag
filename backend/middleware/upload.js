@@ -59,7 +59,7 @@ function singleFileUpload(fieldName) {
 module.exports = { singleFileUpload, MAX_FILE_SIZE_BYTES };
 
 /**
- * Chat attachments (Squad Notes): an image OR a short voice recording,
+ * Chat attachments (Squad Chats): an image OR a short voice recording,
  * sent as an optional file alongside/instead of message text. Kept as
  * its own multer instance -- separate allowed mimetypes/size ceiling --
  * so it can't loosen what's accepted for Task file / submission uploads

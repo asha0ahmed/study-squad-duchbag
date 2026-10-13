@@ -43,6 +43,9 @@ psql -U postgres -d studysquad -f schema.sql
 > For the admin-to-squad exam links, also run:
 > `psql -U postgres -d studysquad -f migrations/016_add_squad_exams.sql`
 
+> For the public Squad ID (random 2-3 digit number shown in chats), also run:
+> `psql -U postgres -d studysquad -f migrations/017_add_squad_public_code.sql`
+
 Start the API (listens on **port 3000**):
 
 ```bash

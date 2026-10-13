@@ -107,6 +107,8 @@ export interface SavedStudentSubject {
 
 export interface Squad {
   id: number;
+  /** Random 2-3 digit "Squad ID" shown to users. Not the internal id. */
+  public_code: number;
   academic_group: AcademicGroup;
   year: string;
   aspirant_type: string;
@@ -281,7 +283,7 @@ export interface SquadSuggestion {
   suggestedCoverage: number;
 }
 
-// ---- Chat ("Squad Notes") ----
+// ---- Chat ("Squad Chats") ----
 
 export type SquadMessageType = "text" | "image" | "voice";
 
@@ -323,11 +325,25 @@ export interface SquadMessagesPage {
   hasMore: boolean;
 }
 
+/** Response from GET /admin/squads/:squadId/messages (admin can read any squad chat). */
+export interface AdminSquadChatPage extends SquadMessagesPage {
+  squad: {
+    id: number;
+    public_code: number;
+    academic_group: AcademicGroup;
+    year: string;
+    aspirant_type: string;
+    status: SquadStatus;
+    mentor_name: string | null;
+  };
+}
+
 // ---- Admin: Student & Mentor records ----
 
 /** Minimal squad context attached to an admin student-search result. */
 export interface AdminStudentSquad {
   id: number;
+  public_code: number;
   status: SquadStatus;
   academic_group: AcademicGroup;
   year: string;
@@ -357,6 +373,7 @@ export interface AdminMentorGroup {
 
 export interface AdminMentorSquad {
   id: number;
+  public_code: number;
   status: SquadStatus;
   academic_group: AcademicGroup;
   year: string;
@@ -453,6 +470,8 @@ export interface SquadExam {
 /** Row from GET /admin/squads. */
 export interface AdminSquad {
   id: number;
+  /** Public 2-3 digit Squad ID that students and mentors see. */
+  public_code: number;
   academic_group: AcademicGroup;
   year: string;
   aspirant_type: string;

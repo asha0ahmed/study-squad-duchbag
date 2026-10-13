@@ -309,7 +309,7 @@ function StudentCard({
         <p className="text-xs font-semibold uppercase tracking-[0.06em] text-text-faint">Squad</p>
         {student.squad ? (
           <p className="mt-1.5 text-sm text-text">
-            {student.squad.academic_group} · {student.squad.year} —{" "}
+            Squad ID {student.squad.public_code} · {student.squad.academic_group} · {student.squad.year} —{" "}
             <span className="text-text-dim">{student.squad.status}</span>
           </p>
         ) : (

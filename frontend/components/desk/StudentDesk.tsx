@@ -97,7 +97,7 @@ export function StudentDesk({ student }: { student: StudentSession }) {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="eyebrow text-indigo">
-                  {squad.squad.academic_group} · {squad.squad.year}
+                  {squad.squad.academic_group} · {squad.squad.year} · Squad ID {squad.squad.public_code}
                 </p>
                 <p className="mt-1 font-display text-2xl font-bold text-text">Your Squad</p>
               </div>
@@ -199,7 +199,7 @@ export function StudentDesk({ student }: { student: StudentSession }) {
         />
         <DeskLink
           href="/squad/notes"
-          label="Squad Notes"
+          label="Squad Chats"
           desc="Talk to your squad"
           icon="message"
           accent="from-emerald to-cyan"

@@ -1,5 +1,6 @@
 "use client";
 
+import { SquadIdBadge } from "@/components/squad/SquadIdBadge";
 import Link from "next/link";
 import { UiIcon } from "@/components/layout/DockIcons";
 import { useRouter } from "next/navigation";
@@ -136,6 +137,7 @@ export default function SquadPage() {
         <div className="animate-fade-in-up flex flex-wrap items-center gap-3">
           <p className="eyebrow text-cyan">Your Squad</p>
           <StatusBadge label={isActive ? "Active" : "Filling Up"} tone={isActive ? "locked" : "pending"} />
+          <SquadIdBadge code={squadData.public_code} className="text-sm" />
         </div>
         <h1 className="mt-1 font-display text-4xl font-extrabold tracking-tight text-text">
           {squadData.academic_group} · {squadData.year}

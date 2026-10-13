@@ -169,7 +169,7 @@ export default function AdminMentorsPage() {
                           <ul className="mt-1.5 flex flex-col gap-1">
                             {mentor.squads.map((squad) => (
                               <li key={squad.id} className="text-sm text-text">
-                                {squad.academic_group} · {squad.year} · {squad.aspirant_type}{" "}
+                                Squad ID {squad.public_code} · {squad.academic_group} · {squad.year} · {squad.aspirant_type}{" "}
                                 <span
                                   className={
                                     "ml-1 text-xs font-semibold " +

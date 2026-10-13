@@ -14,7 +14,7 @@ const { uploadBuffer } = require('./utils/cloudinary');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Squad Notes chat used to work by having every open chat tab poll
+// Squad Chats chat used to work by having every open chat tab poll
 // GET /squads/:squadId/messages every few seconds, forever, whether or
 // not anyone was actually typing -- that request volume was the single
 // biggest driver of load under real traffic. `server` wraps the same
@@ -90,7 +90,7 @@ app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(apiLimiter);
 
-// --- Socket.io: authenticated realtime push for Squad Notes chat ---
+// --- Socket.io: authenticated realtime push for Squad Chats chat ---
 // Sending a message still goes entirely through the REST endpoint further
 // down (so file/voice uploads keep working exactly as before) -- Socket.io
 // only replaces how *other* squad members find out a message arrived, so
@@ -350,7 +350,7 @@ async function getSubscriptionState(studentId, db = pool) {
   };
 }
 
-// Blocks squad features (Squad Notes, tasks) for a student whose trial or
+// Blocks squad features (Squad Chats, tasks) for a student whose trial or
 // paid subscription has ended. Mentors pass straight through. Students
 // with no subscription history at all ('none') are not blocked here --
 // matching already requires a payment, and an invited student whose squad
@@ -374,7 +374,7 @@ async function requireActiveSubscription(req, res, next) {
 
 // Replaces the old "4 manual confirms -> lock" flow. There is no confirm
 // step anymore -- every member is inserted already 'confirmed'. A squad
-// becomes active (status='locked', Squad Notes unlocks) automatically the
+// becomes active (status='locked', Squad Chats unlocks) automatically the
 // moment its member count reaches 4, whether that 4th member arrived via
 // matching or an invite link. Safe to call any time; no-ops if already
 // active or still under 4.
@@ -1065,7 +1065,7 @@ async function attachSquadAndLatestPayment(students) {
   return Promise.all(
     students.map(async (student) => {
       const squadResult = await pool.query(
-        `SELECT sq.id, sq.status, sq.academic_group, sq.year
+        `SELECT sq.id, sq.public_code, sq.status, sq.academic_group, sq.year
          FROM squad_members sm
          JOIN squads sq ON sq.id = sm.squad_id
          WHERE sm.student_id = $1`,
@@ -1387,7 +1387,7 @@ app.get('/admin/mentors', adminLimiter, async (req, res) => {
           [mentor.id]
         );
         const squadsResult = await pool.query(
-          `SELECT id, status, academic_group, year, aspirant_type
+          `SELECT id, public_code, status, academic_group, year, aspirant_type
            FROM squads WHERE mentor_id = $1 ORDER BY created_at DESC`,
           [mentor.id]
         );
@@ -2173,7 +2173,7 @@ app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, me
 });
 
 
-// Squad Notes chat history is paginated by message id rather than
+// Squad Chats chat history is paginated by message id rather than
 // re-sent in full on every request. `id` (not `created_at`) is used as
 // the cursor: it's the primary key, already unique and monotonically
 // increasing per insert, so "give me everything after id X" is
@@ -2204,6 +2204,50 @@ const SQUAD_MESSAGE_COLUMNS = `
          WHEN sm.sender_type = 'student' THEN (SELECT name FROM students WHERE id = sm.sender_id)
          WHEN sm.sender_type = 'mentor' THEN (SELECT name FROM mentors WHERE id = sm.sender_id)
        END AS sender_name`;
+
+// Shared by the member/mentor route below and the admin route further down.
+// Three access patterns: latest page (no cursor), `before` (older page),
+// `after` (poll for new messages only).
+async function loadSquadMessages(squadId, { limit, before, after }) {
+  let rows;
+  let hasMore = false;
+
+  if (after !== null) {
+    const result = await pool.query(
+      `SELECT ${SQUAD_MESSAGE_COLUMNS}
+       FROM squad_messages sm
+       WHERE sm.squad_id = $1 AND sm.id > $2
+       ORDER BY sm.id ASC
+       LIMIT $3`,
+      [squadId, after, MAX_NEW_MESSAGES_PAGE_SIZE]
+    );
+    rows = result.rows;
+  } else if (before !== null) {
+    const result = await pool.query(
+      `SELECT ${SQUAD_MESSAGE_COLUMNS}
+       FROM squad_messages sm
+       WHERE sm.squad_id = $1 AND sm.id < $2
+       ORDER BY sm.id DESC
+       LIMIT $3`,
+      [squadId, before, limit + 1]
+    );
+    hasMore = result.rows.length > limit;
+    rows = result.rows.slice(0, limit).reverse();
+  } else {
+    const result = await pool.query(
+      `SELECT ${SQUAD_MESSAGE_COLUMNS}
+       FROM squad_messages sm
+       WHERE sm.squad_id = $1
+       ORDER BY sm.id DESC
+       LIMIT $2`,
+      [squadId, limit + 1]
+    );
+    hasMore = result.rows.length > limit;
+    rows = result.rows.slice(0, limit).reverse();
+  }
+
+  return { messages: rows, hasMore };
+}
 
 app.get('/squads/:squadId/messages', requireAuth, requireActiveSubscription, async (req, res) => {
   const squadId = parseInt(req.params.squadId);
@@ -2247,50 +2291,9 @@ app.get('/squads/:squadId/messages', requireAuth, requireActiveSubscription, asy
       return res.status(403).json({ error: 'You are not authorized to view messages in this squad.' });
     }
 
-    let rows;
-    let hasMore = false;
+    const { messages, hasMore } = await loadSquadMessages(squadId, { limit, before, after });
 
-    if (after !== null) {
-      // Poll for new messages only. The client already has everything up
-      // to and including `after`, so this never re-sends history.
-      const result = await pool.query(
-        `SELECT ${SQUAD_MESSAGE_COLUMNS}
-         FROM squad_messages sm
-         WHERE sm.squad_id = $1 AND sm.id > $2
-         ORDER BY sm.id ASC
-         LIMIT $3`,
-        [squadId, after, MAX_NEW_MESSAGES_PAGE_SIZE]
-      );
-      rows = result.rows;
-    } else if (before !== null) {
-      // Scroll-up pagination: the page of messages immediately older than
-      // `before`. Fetching `limit + 1` and trimming the extra row tells us
-      // whether more history remains without a separate COUNT query.
-      const result = await pool.query(
-        `SELECT ${SQUAD_MESSAGE_COLUMNS}
-         FROM squad_messages sm
-         WHERE sm.squad_id = $1 AND sm.id < $2
-         ORDER BY sm.id DESC
-         LIMIT $3`,
-        [squadId, before, limit + 1]
-      );
-      hasMore = result.rows.length > limit;
-      rows = result.rows.slice(0, limit).reverse();
-    } else {
-      // Initial load: just the latest page, not the whole history.
-      const result = await pool.query(
-        `SELECT ${SQUAD_MESSAGE_COLUMNS}
-         FROM squad_messages sm
-         WHERE sm.squad_id = $1
-         ORDER BY sm.id DESC
-         LIMIT $2`,
-        [squadId, limit + 1]
-      );
-      hasMore = result.rows.length > limit;
-      rows = result.rows.slice(0, limit).reverse();
-    }
-
-    res.json({ messages: rows, hasMore });
+    res.json({ messages, hasMore });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong fetching messages.' });
@@ -2413,7 +2416,7 @@ app.get('/admin/squads', adminLimiter, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT sq.id, sq.academic_group, sq.year, sq.aspirant_type, sq.status, sq.created_at,
+      `SELECT sq.id, sq.public_code, sq.academic_group, sq.year, sq.aspirant_type, sq.status, sq.created_at,
               m.name AS mentor_name,
               (SELECT COUNT(*)::int FROM squad_members sm WHERE sm.squad_id = sq.id) AS member_count,
               ex.url AS exam_url, ex.message AS exam_message, ex.updated_at AS exam_updated_at
@@ -2426,6 +2429,50 @@ app.get('/admin/squads', adminLimiter, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong loading squads.' });
+  }
+});
+
+// Admin can open ANY squad's chat (read-only, no subscription/membership
+// checks). Same pagination as the member route: no cursor = latest page,
+// ?before=<id> = older page, ?after=<id> = poll for new messages.
+app.get('/admin/squads/:squadId/messages', adminLimiter, async (req, res) => {
+  const adminSecret = req.headers['x-admin-secret'];
+  if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const squadId = parseInt(req.params.squadId, 10);
+  if (!Number.isFinite(squadId)) {
+    return res.status(400).json({ error: 'Invalid squad.' });
+  }
+
+  const parsedLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(parsedLimit, 1), MAX_MESSAGE_PAGE_SIZE)
+    : DEFAULT_MESSAGE_PAGE_SIZE;
+  const parsedBefore = parseInt(req.query.before, 10);
+  const before = Number.isFinite(parsedBefore) ? parsedBefore : null;
+  const parsedAfter = parseInt(req.query.after, 10);
+  const after = Number.isFinite(parsedAfter) ? parsedAfter : null;
+
+  try {
+    const squadResult = await pool.query(
+      `SELECT sq.id, sq.public_code, sq.academic_group, sq.year, sq.aspirant_type, sq.status,
+              m.name AS mentor_name
+       FROM squads sq
+       LEFT JOIN mentors m ON m.id = sq.mentor_id
+       WHERE sq.id = $1`,
+      [squadId]
+    );
+    if (squadResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Squad not found.' });
+    }
+
+    const { messages, hasMore } = await loadSquadMessages(squadId, { limit, before, after });
+    res.json({ squad: squadResult.rows[0], messages, hasMore });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong fetching messages.' });
   }
 });
 
@@ -2481,7 +2528,7 @@ app.delete('/admin/squads/:squadId/exam', adminLimiter, async (req, res) => {
 
 // Members of the squad (and its mentor) can read the exam link sent to it.
 // Students need an active paid plan or their 7-day invite trial; expired
-// students get 402 subscriptionExpired (same rule as Squad Notes and Tasks).
+// students get 402 subscriptionExpired (same rule as Squad Chats and Tasks).
 app.get('/squads/:squadId/exam', requireAuth, requireActiveSubscription, async (req, res) => {
   const squadId = parseInt(req.params.squadId);
 

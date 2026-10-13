@@ -34,6 +34,7 @@ import type {
   SquadDetailView,
   SquadMessageInsertResult,
   SquadMessagesPage,
+  AdminSquadChatPage,
   SquadSuggestion,
   Student,
   StudentSession,
@@ -222,10 +223,10 @@ export function clearAdminSecret() {
   window.sessionStorage.removeItem(ADMIN_SECRET_KEY);
 }
 
-// ---- Squad Notes "seen" tracking (client-only, best-effort) ----
+// ---- Squad Chats "seen" tracking (client-only, best-effort) ----
 // The backend has no read-receipt concept. This just remembers, per squad,
 // the timestamp of the newest message the student has actually opened
-// Squad Notes to see, so the mobile drawer can show a lightweight unread
+// Squad Chats to see, so the mobile drawer can show a lightweight unread
 // dot. Nothing here syncs across devices -- it's a UX nicety, not truth.
 
 function notesSeenKey(squadId: number) {
@@ -651,7 +652,7 @@ export function getMyMentorSquads() {
   return request<MentorSquad[]>("/mentors/my-squads");
 }
 
-// ---- Chat ("Squad Notes") ----
+// ---- Chat ("Squad Chats") ----
 
 export interface SendSquadMessageAttachment {
   file: File | Blob;
@@ -660,7 +661,7 @@ export interface SendSquadMessageAttachment {
 }
 
 /**
- * Sends a Squad Notes message. `message` may be omitted if `attachment`
+ * Sends a Squad Chats message. `message` may be omitted if `attachment`
  * is provided (an image or voice-only message), and vice versa.
  */
 export function sendSquadMessage(
@@ -697,7 +698,7 @@ export interface GetSquadMessagesOptions {
 }
 
 /**
- * Fetches one page of Squad Notes messages. Never fetches the whole
+ * Fetches one page of Squad Chats messages. Never fetches the whole
  * history: pass no options for the initial page, `before` to page
  * upward into older messages, or `after` to poll for new ones only.
  */
@@ -708,6 +709,22 @@ export function getSquadMessages(squadId: number, options: GetSquadMessagesOptio
   if (options.after !== undefined) params.set("after", String(options.after));
   const query = params.toString();
   return request<SquadMessagesPage>(`/squads/${squadId}/messages${query ? `?${query}` : ""}`);
+}
+
+/**
+ * Admin-only: read any squad's chat (no membership/subscription needed).
+ * Same cursor options as getSquadMessages.
+ */
+export function adminGetSquadMessages(secret: string, squadId: number, options: GetSquadMessagesOptions = {}) {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.before !== undefined) params.set("before", String(options.before));
+  if (options.after !== undefined) params.set("after", String(options.after));
+  const query = params.toString();
+  return request<AdminSquadChatPage>(`/admin/squads/${squadId}/messages${query ? `?${query}` : ""}`, {
+    skipAuth: true,
+    adminSecret: secret,
+  });
 }
 
 // ---- Task Management ----

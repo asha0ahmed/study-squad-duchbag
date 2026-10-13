@@ -739,7 +739,7 @@ body.has-bottom-dock {
 }
 
 /* ---------------------------------------------------------------- */
-/* Squad Notes — bounded Messenger-style conversation shell           */
+/* Squad Chats — bounded Messenger-style conversation shell           */
 /* ---------------------------------------------------------------- */
 /* The page owns a fixed viewport budget. The message list is the only
    scrolling region, so the composer cannot be pushed below the viewport or
@@ -890,7 +890,7 @@ body.has-bottom-dock {
 }
 
 /* ---------------------------------------------------------------- */
-/* Squad Notes — attachment menu (Camera / Gallery / Cancel)          */
+/* Squad Chats — attachment menu (Camera / Gallery / Cancel)          */
 /* ---------------------------------------------------------------- */
 /* Anchored to the image button and opens UPWARD inside the chat area,
    so it never reaches the bottom dock. */

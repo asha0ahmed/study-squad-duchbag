@@ -104,8 +104,40 @@ CREATE TABLE squads (
   invite_code VARCHAR(20) UNIQUE,
   invite_uses INTEGER NOT NULL DEFAULT 0 CHECK (invite_uses BETWEEN 0 AND 2),
   mentor_id INTEGER REFERENCES mentors(id),
+  public_code INTEGER UNIQUE, -- random 2-3 digit "Squad ID" shown to users (see trigger below)
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Assigns squads.public_code automatically on insert. Same as
+-- migrations/017_add_squad_public_code.sql.
+CREATE OR REPLACE FUNCTION assign_squad_public_code() RETURNS trigger AS $$
+DECLARE
+  candidate INTEGER;
+BEGIN
+  IF NEW.public_code IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+  PERFORM pg_advisory_xact_lock(7301);
+  SELECT n INTO candidate
+  FROM generate_series(10, 999) AS n
+  WHERE NOT EXISTS (SELECT 1 FROM squads WHERE public_code = n)
+  ORDER BY random()
+  LIMIT 1;
+  IF candidate IS NULL THEN
+    SELECT n INTO candidate
+    FROM generate_series(1000, 99999) AS n
+    WHERE NOT EXISTS (SELECT 1 FROM squads WHERE public_code = n)
+    ORDER BY random()
+    LIMIT 1;
+  END IF;
+  NEW.public_code := candidate;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_assign_squad_public_code
+  BEFORE INSERT ON squads
+  FOR EACH ROW EXECUTE FUNCTION assign_squad_public_code();
 
 CREATE TABLE squad_members (
   id SERIAL PRIMARY KEY,

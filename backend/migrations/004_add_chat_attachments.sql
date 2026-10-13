@@ -1,4 +1,4 @@
--- Chat: image sharing & voice messages in Squad Notes.
+-- Chat: image sharing & voice messages in Squad Chats.
 --
 -- A message can now carry an optional attachment (image or voice clip)
 -- instead of, or alongside, its text. Follows the same Cloudinary

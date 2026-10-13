@@ -1,5 +1,6 @@
 "use client";
 
+import { SquadIdBadge } from "@/components/squad/SquadIdBadge";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -204,7 +205,9 @@ function MySquadsTab({ squads }: { squads: MentorSquad[] }) {
         >
           <div className="flex items-center justify-between border-b border-border-soft px-5 py-4">
             <div>
-              <p className="eyebrow text-indigo">{squad.academic_group}</p>
+              <p className="eyebrow text-indigo">
+                {squad.academic_group} · <SquadIdBadge code={squad.public_code} />
+              </p>
               <span className="font-display text-lg font-bold text-text">{squad.year}</span>
             </div>
             <div className="flex items-center gap-2">

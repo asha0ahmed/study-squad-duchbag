@@ -1,5 +1,30 @@
 # Study Squad — Fix & Improvement Report
 
+## Session 10 — Public Squad ID, "Squad Chats" rename, admin can read every chat
+
+- **Squad ID shown to everyone.** New `squads.public_code` = random, unique
+  2-3 digit number (10-999; only if all 990 are used, 4+ digits). It is NOT the
+  internal `squads.id`. A DB trigger assigns it on insert, so no server code is
+  needed when squads are created. Shown as "Squad ID 482" (tap to copy) in:
+  Squad Chats header (`Squad Chats · ID 482`), My Squad top row, Student Desk
+  squad card, Mentor Desk squad cards, and Admin Squads / Mentors / Students.
+- **Rename:** every "Squad Notes" -> "Squad Chats" (UI text, comments, docs).
+  The URL `/squad/notes` is unchanged so old links/bookmarks keep working.
+- **Admin sees all chats.** New `GET /admin/squads/:squadId/messages`
+  (x-admin-secret, same paging as the member route, read-only, no
+  subscription/membership check) and page `/admin/squads/chat?squadId=...`
+  (opened by the new "Open Chat" button on each Admin Squads card; live
+  refresh every 5s, "Load older messages", images and voice clips).
+  Admin Squads search now matches the public Squad ID.
+- Shared message query refactored into `loadSquadMessages()` in `server.js`.
+- **Action required:** run `backend/migrations/017_add_squad_public_code.sql`
+  on every existing database (local and live), then restart the backend.
+  Fresh databases get it from `schema.sql` automatically.
+- Verified on PostgreSQL 16: fresh schema, migration on a DB with 1,100 old
+  squads (all unique, re-runnable), auto-code on new squads, admin endpoint
+  (403 without secret, paging, `after` polling, 404). Frontend `tsc --noEmit`
+  and `eslint` clean.
+
 ## Session 9 — Squads hold 10 members
 
 - **Capacity 6 -> 10** via one setting per side: `backend/utils/squadConfig.js`

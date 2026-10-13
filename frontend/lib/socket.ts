@@ -5,7 +5,7 @@ let socket: Socket | null = null;
 
 /**
  * One shared Socket.io connection per browser tab, used for realtime
- * Squad Notes chat push (see app/squad/notes/page.tsx). This replaces
+ * Squad Chats chat push (see app/squad/notes/page.tsx). This replaces
  * what used to be a `setInterval` polling GET /squads/:squadId/messages
  * every few seconds from every open chat tab, whether or not anyone was
  * actually typing -- that recurring request was the main thing limiting
@@ -17,7 +17,7 @@ let socket: Socket | null = null;
  * localStorage on every (re)connect attempt, not just the first one.
  * Starts disconnected (`autoConnect: false`) -- callers explicitly
  * `.connect()` when a chat screen mounts and `.disconnect()` when it
- * unmounts, so a tab that never opens Squad Notes never opens a socket.
+ * unmounts, so a tab that never opens Squad Chats never opens a socket.
  */
 export function getSocket(): Socket {
   if (socket) return socket;
