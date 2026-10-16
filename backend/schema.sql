@@ -246,7 +246,7 @@ CREATE TABLE payments (
   amount INTEGER NOT NULL,
   method VARCHAR(20) NOT NULL CHECK (method IN ('nagad', 'bkash')),
   sender_phone VARCHAR(20) NOT NULL,
-  trx_id VARCHAR(50) NOT NULL,
+  trx_id VARCHAR(50),
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at TIMESTAMP DEFAULT NOW(),
   reviewed_at TIMESTAMP,

@@ -121,6 +121,22 @@ export default function ComplaintsPage() {
             {submitting ? "Submitting…" : "Submit Complaint"}
           </button>
         </form>
+
+        <div className="mt-6 rounded-2xl border border-border bg-surface-2/70 px-5 py-4">
+          <p className="text-sm font-semibold text-text">Prefer WhatsApp?</p>
+          <p className="mt-1 text-sm text-text-dim">
+            Message our support team at{" "}
+            <a
+              href="https://wa.me/8801937553593"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-emerald underline underline-offset-2 hover:text-text"
+            >
+              +8801937553593
+            </a>
+            .
+          </p>
+        </div>
       </div>
     </main>
   );

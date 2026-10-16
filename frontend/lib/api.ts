@@ -507,7 +507,7 @@ export interface SubmitPaymentInput {
   plan: PaymentPlan;
   method: PaymentMethod;
   sender_phone: string;
-  trx_id: string;
+  trx_id?: string;
 }
 
 export function submitPayment(studentId: number, input: SubmitPaymentInput) {
@@ -707,7 +707,7 @@ export function sendSquadMessage(
 }
 
 export interface GetSquadMessagesOptions {
-  /** Page size for the initial load or a `before` page. Backend default is 60, max 100. */
+  /** Page size for the initial load or a `before` page. Backend default is 30, max 100. */
   limit?: number;
   /** Cursor: only messages older than this message id (scroll-up pagination). */
   before?: number;

@@ -26,8 +26,8 @@ const MAX_RECORDING_SECONDS = 120;
 // How many messages to request on the initial load and on each
 // scroll-up ("load older") page. Kept well under the backend's hard cap
 // (100) so a single request stays fast even on a cold connection.
-const INITIAL_PAGE_SIZE = 60;
-const OLDER_PAGE_SIZE = 40;
+const INITIAL_PAGE_SIZE = 30;
+const OLDER_PAGE_SIZE = 30;
 
 // Trigger "load older messages" once the user has scrolled within this
 // many pixels of the top of the chat pane.

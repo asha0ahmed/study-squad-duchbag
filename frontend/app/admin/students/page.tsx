@@ -354,8 +354,8 @@ function StudentCard({
         {student.latest_payment ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <p className="text-sm text-text">
-              ৳{student.latest_payment.amount} · {student.latest_payment.method} · Trx{" "}
-              {student.latest_payment.trx_id} ·{" "}
+              ৳{student.latest_payment.amount} · {student.latest_payment.method} ·{" "}
+              {student.latest_payment.trx_id ? <>Trx {student.latest_payment.trx_id} · </> : null}
               <span
                 className={
                   student.latest_payment.status === "approved"

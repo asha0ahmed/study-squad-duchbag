@@ -810,7 +810,7 @@ app.post('/students/:id/subjects', requireAuth, async (req, res) => {
 // ---- Mentor-fee subscription payments ----
 // A student must have one row here with status = 'approved' before they
 // can run matching (see the payment gate in POST /students/:id/match).
-// Submission is self-reported (phone + Trx ID) and reviewed by an admin.
+// Submission is self-reported (sender phone; transaction ID is optional) and reviewed by an admin.
 
 const PAYMENT_PLANS = {
   '1_month': { amount: 99, months: 1 },
@@ -826,6 +826,7 @@ app.post('/students/:id/payments', requireAuth, async (req, res) => {
   }
 
   const { plan, method, sender_phone, trx_id } = req.body;
+  const transactionId = typeof trx_id === 'string' ? trx_id.trim() : '';
 
   if (!PAYMENT_PLANS[plan]) {
     return res.status(400).json({ error: 'plan must be 1_month or 6_month.' });
@@ -833,8 +834,11 @@ app.post('/students/:id/payments', requireAuth, async (req, res) => {
   if (!PAYMENT_METHODS.includes(method)) {
     return res.status(400).json({ error: 'method must be nagad or bkash.' });
   }
-  if (!sender_phone || !trx_id) {
-    return res.status(400).json({ error: 'sender_phone and trx_id are required.' });
+  if (typeof sender_phone !== 'string' || !sender_phone.trim()) {
+    return res.status(400).json({ error: 'sender_phone is required.' });
+  }
+  if (transactionId.length > 50) {
+    return res.status(400).json({ error: 'trx_id must be 50 characters or fewer.' });
   }
 
   try {
@@ -857,7 +861,7 @@ app.post('/students/:id/payments', requireAuth, async (req, res) => {
       `INSERT INTO payments (student_id, plan, amount, method, sender_phone, trx_id, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING *`,
-      [studentId, plan, amount, method, sender_phone, trx_id]
+      [studentId, plan, amount, method, sender_phone.trim(), transactionId || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -2210,7 +2214,7 @@ app.post('/squads/:squadId/messages', requireAuth, requireActiveSubscription, me
 // migrations/010_add_squad_messages_index.sql serves directly in either
 // scan direction -- no sort step, no seq scan, regardless of how long a
 // squad's history gets.
-const DEFAULT_MESSAGE_PAGE_SIZE = 60;
+const DEFAULT_MESSAGE_PAGE_SIZE = 30;
 const MAX_MESSAGE_PAGE_SIZE = 100;
 // `after` polls are uncapped by page size (a client sets its own cadence),
 // but still bounded so a client that reconnects after a long gap (or a

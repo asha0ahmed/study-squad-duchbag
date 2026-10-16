@@ -273,14 +273,7 @@ export default function SubscribePage() {
                 We&apos;ve got your payment
               </h1>
               <p className="mt-3 text-sm text-text-dim">
-                {payment?.trx_id ? (
-                  <>
-                    Trx ID <span className="font-semibold text-text">{payment.trx_id}</span> is being
-                    reviewed.
-                  </>
-                ) : (
-                  "Your payment is being reviewed."
-                )}{" "}
+                Your payment is being reviewed.{" "}
                 The time is added to your subscription as soon as it&apos;s approved.
               </p>
               <Link href="/squad" className="btn btn-primary mt-6 inline-flex">
@@ -306,7 +299,7 @@ export default function SubscribePage() {
                 subheading={
                   subscribed
                     ? "Buy again any time — the new period is added on top of the time you already have."
-                    : "Pick a plan, send the payment, and tell us the details below."
+                    : "Pick a plan, send the payment, and enter the phone number you paid from."
                 }
                 submitLabel={expired ? "Submit Renewal" : subscribed ? "Submit Extension" : "Submit Payment"}
               />
@@ -326,8 +319,7 @@ export default function SubscribePage() {
             We&apos;ve got your payment
           </h1>
           <p className="mt-3 text-sm text-text-dim">
-            Trx ID <span className="font-semibold text-text">{screen.payment.trx_id}</span> is
-            being reviewed. This is usually quick — check back shortly.
+            Your payment is being reviewed. This is usually quick — check back shortly.
           </p>
 
           <AssignmentCountdown payment={screen.payment} now={now} />

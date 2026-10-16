@@ -6,12 +6,21 @@ import { TextField } from "@/components/auth/FormFields";
 import type { PaymentMethod, PaymentPlan } from "@/lib/types";
 
 const PLANS: { value: PaymentPlan; label: string; price: string; discountedPrice: string; note: string }[] = [
-  { value: "1_month", label: "1 Month", price: "৳149", discountedPrice: "৳99", note: "Try it out" },
-  { value: "6_month", label: "6 Months", price: "৳799", discountedPrice: "৳499", note: "Best value" },
+  { value: "1_month", label: "1 Month", price: "৳199", discountedPrice: "৳99", note: "Try it out" },
+  { value: "6_month", label: "6 Months", price: "৳1199", discountedPrice: "৳499", note: "Best value" },
 ];
 
 // Frontend-only promotional configuration. Replace the five placeholder codes as needed.
-const VALID_PROMO_CODES = ["ANX20", "38Kh", "PLACEHOLDER1", "PLACEHOLDER2", "PLACEHOLDER3", "PLACEHOLDER4", "PLACEHOLDER5"];
+const VALID_PROMO_CODES = [
+  "ANX20",
+  "38Kh",
+  "squad24",
+  "PLACEHOLDER1",
+  "PLACEHOLDER2",
+  "PLACEHOLDER3",
+  "PLACEHOLDER4",
+  "PLACEHOLDER5",
+];
 const PROMO_STORAGE_KEY = "study-squad-applied-promo-code";
 
 const METHODS: { value: PaymentMethod; label: string; number: string }[] = [
@@ -32,7 +41,7 @@ export function PaymentForm({
   error,
   setError,
   heading = "Choose your plan",
-  subheading = "A small fee covers your mentor's time. Pick a plan, send the payment, and tell us the details below.",
+  subheading = "A small fee covers your mentor's time. Pick a plan, send the payment, and enter the phone number you paid from.",
   submitLabel = "Proceed",
 }: {
   onSubmit: (input: PaymentFormInput) => void | Promise<void>;
@@ -46,6 +55,8 @@ export function PaymentForm({
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
   const [method, setMethod] = useState<PaymentMethod | null>(null);
   const [senderPhone, setSenderPhone] = useState("");
+  // Kept for the commented-out optional transaction-ID input below.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [trxId, setTrxId] = useState("");
   const [promoCode, setPromoCode] = useState("");
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
@@ -75,8 +86,8 @@ export function PaymentForm({
     e.preventDefault();
     setError(null);
 
-    if (!plan || !method || !senderPhone.trim() || !trxId.trim()) {
-      setError("Choose a plan, a payment method, and fill in both fields below.");
+    if (!plan || !method || !senderPhone.trim()) {
+      setError("Choose a plan, a payment method, and enter the phone number you sent payment from.");
       return;
     }
 
@@ -185,13 +196,14 @@ export function PaymentForm({
             value={senderPhone}
             onChange={(e) => setSenderPhone(e.target.value)}
           />
+          {/* Transaction ID is optional and hidden for now. Restore this field if needed:
           <TextField
             label="Transaction ID (Trx ID)"
             htmlFor="trx_id"
-            required
             value={trxId}
             onChange={(e) => setTrxId(e.target.value)}
           />
+          */}
         </div>
 
         <FormError message={error} />

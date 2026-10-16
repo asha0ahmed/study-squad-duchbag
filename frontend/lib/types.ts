@@ -202,7 +202,7 @@ export interface Payment {
   amount: number;
   method: PaymentMethod;
   sender_phone: string;
-  trx_id: string;
+  trx_id: string | null;
   status: PaymentStatus;
   created_at: string;
   reviewed_at: string | null;

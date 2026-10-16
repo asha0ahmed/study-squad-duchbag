@@ -121,7 +121,8 @@ export default function AdminPaymentsPage() {
                     {p.method === "nagad" ? "Nagad" : "bKash"}
                   </div>
                   <div className="mt-1 text-xs text-text-faint">
-                    From {p.sender_phone} · Trx {p.trx_id} · {formatDate(p.created_at)}
+                    From {p.sender_phone}
+                    {p.trx_id ? <> · Trx {p.trx_id}</> : null} · {formatDate(p.created_at)}
                   </div>
                 </div>
                 {p.status === "pending" ? (

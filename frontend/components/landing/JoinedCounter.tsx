@@ -2,19 +2,31 @@
 
 import { useEffect, useState } from "react";
 
-const BASE_COUNT = 400;
+const BASE_COUNT = 1282;
+// Shared UTC launch anchor: 2026-10-16 17:24:41 UTC (the request time).
+// Every visitor sees the same count; change this timestamp only to reset the counter.
+const COUNTER_START_MS = Date.UTC(2026, 9, 16, 17, 24, 41);
+const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * A number that hovers around 400 and drifts a few units every couple of
- * seconds. It is derived from the clock (a few overlapping slow waves)
- * rather than from random state, so the two copies on the landing page
- * (mobile + desktop placement) always agree, and the very first render is
- * a fixed value so server and client HTML match (no hydration warning).
+ * Stable pseudo-random increment for a given elapsed hour, so all devices
+ * share the same count without requiring a database or browser-local state.
  */
+function incrementForHour(hour: number) {
+  let value = (hour + 0x9e3779b9) >>> 0;
+  value = Math.imul(value ^ (value >>> 16), 0x7feb352d);
+  value = Math.imul(value ^ (value >>> 15), 0x846ca68b);
+  value ^= value >>> 16;
+  return 2 + (value >>> 0) % 3;
+}
+
 function currentCount(now: number) {
-  const wave =
-    14 * Math.sin(now / 7000) + 9 * Math.sin(now / 2900 + 1) + 5 * Math.sin(now / 1300 + 2);
-  return Math.round(BASE_COUNT + wave);
+  const elapsedHours = Math.max(0, Math.floor((now - COUNTER_START_MS) / HOUR_MS));
+  let count = BASE_COUNT;
+  for (let hour = 1; hour <= elapsedHours; hour += 1) {
+    count += incrementForHour(hour);
+  }
+  return count;
 }
 
 export function JoinedCounter({ className = "" }: { className?: string }) {
@@ -23,9 +35,11 @@ export function JoinedCounter({ className = "" }: { className?: string }) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     function tick() {
-      setCount(currentCount(Date.now()));
-      // Irregular 1.8–3.6s beat so it feels live rather than metronomic.
-      timer = setTimeout(tick, 1800 + Math.random() * 1800);
+      const now = Date.now();
+      setCount(currentCount(now));
+      const elapsedHours = Math.max(0, Math.floor((now - COUNTER_START_MS) / HOUR_MS));
+      const nextUpdate = COUNTER_START_MS + (elapsedHours + 1) * HOUR_MS;
+      timer = setTimeout(tick, Math.max(1000, nextUpdate - now + 50));
     }
     tick();
     return () => clearTimeout(timer);

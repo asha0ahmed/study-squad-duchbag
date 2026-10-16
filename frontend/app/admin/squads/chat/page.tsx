@@ -8,7 +8,7 @@ import { SquadIdBadge } from "@/components/squad/SquadIdBadge";
 import { adminGetSquadMessages, ApiError, getAdminSecret } from "@/lib/api";
 import type { AdminSquadChatPage, SquadMessage } from "@/lib/types";
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 30;
 const POLL_MS = 5000;
 
 function formatTime(iso: string) {

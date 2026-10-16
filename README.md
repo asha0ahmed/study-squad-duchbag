@@ -4,7 +4,7 @@ Monorepo: `backend/` (Node/Express + PostgreSQL API) and `frontend/` (Next.js).
 
 ## 1. Prerequisites
 
-- Node.js 18+
+- Node.js 20.9+ (Node.js 22 recommended for Next.js 16)
 - A running PostgreSQL instance
 
 ## 2. Backend setup
@@ -50,6 +50,9 @@ psql -U postgres -d studysquad -f schema.sql
 > `psql -U postgres -d studysquad -f migrations/018_add_password_resets.sql`
 > then set `FRONTEND_URL` and the `SMTP_*` / `MAIL_FROM` values in `.env`
 > (see `.env.example`), and run `npm install` (adds `nodemailer`).
+
+> For optional payment transaction IDs, also run:
+> `psql -U postgres -d studysquad -f migrations/019_optional_payment_transaction_id.sql`
 
 Start the API (listens on **port 3000**):
 

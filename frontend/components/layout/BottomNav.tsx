@@ -372,6 +372,22 @@ export function BottomNav() {
                 </nav>
               )}
 
+              <a
+                href="https://wa.me/8801937553593"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex min-h-[56px] items-center gap-3.5 rounded-xl border border-emerald/20 bg-emerald/5 px-3.5 py-3 transition-colors hover:bg-emerald/10"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-emerald/10 text-emerald">
+                  <UiIcon name="inbox" className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-text">WhatsApp support</span>
+                  <span className="mt-0.5 block text-xs text-text-dim">+8801937553593</span>
+                </span>
+                <span aria-hidden="true" className="text-sm text-emerald">↗</span>
+              </a>
+
               {/* Kept in sync with the Note dock item's own unread dot --
                   surfaced again here since Squad Chats' readiness state is
                   useful context next to the rest of the squad's status. */}
