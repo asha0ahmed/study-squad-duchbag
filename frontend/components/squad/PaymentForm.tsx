@@ -2,13 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { FormError, SubmitButton } from "@/components/auth/DossierCard";
-import { TextField } from "@/components/auth/FormFields";
 import type { PaymentMethod, PaymentPlan } from "@/lib/types";
 
 const PLANS: { value: PaymentPlan; label: string; price: string; discountedPrice: string; note: string }[] = [
   { value: "1_month", label: "1 Month", price: "৳199", discountedPrice: "৳99", note: "Try it out" },
   { value: "6_month", label: "6 Months", price: "৳1199", discountedPrice: "৳499", note: "Best value" },
 ];
+
+// EARLY-BIRD OFFER (display only). While true, every plan always shows the old
+// price struck through next to the discounted price and an "early bird" badge.
+// When the offer ends, set this to false: cards go back to the old behaviour
+// (struck-through price only after a promo code is applied).
+const EARLY_BIRD_ACTIVE = true;
+
+function percentOff(price: string, discounted: string) {
+  const a = Number(price.replace(/[^\d]/g, ""));
+  const b = Number(discounted.replace(/[^\d]/g, ""));
+  return a > 0 ? Math.round(((a - b) / a) * 100) : 0;
+}
 
 // Frontend-only promotional configuration. Replace the five placeholder codes as needed.
 const VALID_PROMO_CODES = [
@@ -119,15 +130,20 @@ export function PaymentForm({
               </span>
               <span className="mt-1 block font-display text-2xl font-bold">{p.label}</span>
               <span className="mt-1 block text-lg">
-                {appliedPromoCode ? (
+                {EARLY_BIRD_ACTIVE || appliedPromoCode ? (
                   <>
-                    <span className="mr-2 text-base text-white/60 line-through">{p.price}</span>
+                    <span className="mr-2 text-base line-through opacity-60">{p.price}</span>
                     <span className="font-bold">{p.discountedPrice}</span>
                   </>
                 ) : (
                   p.price
                 )}
               </span>
+              {EARLY_BIRD_ACTIVE && (
+                <span className="mt-1 block text-xs font-semibold opacity-90">
+                  {percentOff(p.price, p.discountedPrice)}% early bird discount
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -188,15 +204,22 @@ export function PaymentForm({
         </div>
 
         <div className="flex flex-col gap-4">
-          <TextField
-            label="Phone number you sent from"
-            htmlFor="sender_phone"
-            required
-            placeholder="01XXXXXXXXX"
-            value={senderPhone}
-            onChange={(e) => setSenderPhone(e.target.value)}
-          />
-          {/* Transaction ID is optional and hidden for now. Restore this field if needed:
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="sender_phone" className="field-label">
+              Phone number you sent from
+            </label>
+            <p className="text-xs text-text-faint">যে নম্বর থেকে টাকা পাঠিয়েছেন।</p>
+            <input
+              id="sender_phone"
+              name="sender_phone"
+              className="input"
+              required
+              placeholder="01XXXXXXXXX"
+              value={senderPhone}
+              onChange={(e) => setSenderPhone(e.target.value)}
+            />
+          </div>
+          {/* Transaction ID is optional and hidden for now. Restore this field if needed (re-add: import { TextField } from "@/components/auth/FormFields"):
           <TextField
             label="Transaction ID (Trx ID)"
             htmlFor="trx_id"
