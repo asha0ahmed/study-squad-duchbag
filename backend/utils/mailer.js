@@ -5,8 +5,35 @@ const nodemailer = require('nodemailer');
 // SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / MAIL_FROM in .env.
 let transporter = null;
 
+// Two ways to send:
+//  1) Resend HTTP API (set RESEND_API_KEY + MAIL_FROM). Uses normal HTTPS
+//     (port 443), so it works on hosts that block SMTP ports, such as
+//     Render's free plan.
+//  2) Plain SMTP (set SMTP_HOST + MAIL_FROM), as before.
+// If RESEND_API_KEY is set it wins.
 function isConfigured() {
-  return !!(process.env.SMTP_HOST && process.env.MAIL_FROM);
+  return !!(process.env.MAIL_FROM && (process.env.RESEND_API_KEY || process.env.SMTP_HOST));
+}
+
+async function sendViaResendApi({ to, subject, text, html }) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: process.env.MAIL_FROM, to: [to], subject, text, html }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = (await res.json()).message || '';
+    } catch (_) {
+      /* ignore */
+    }
+    throw new Error(`Resend API error ${res.status}: ${detail}`);
+  }
 }
 
 function getTransporter() {
@@ -32,7 +59,11 @@ async function sendMail({ to, subject, text, html }) {
       console.log(`\n[mail not configured] To: ${to}\nSubject: ${subject}\n${text}\n`);
       return;
     }
-    throw new Error('SMTP is not configured (set SMTP_HOST and MAIL_FROM).');
+    throw new Error('Email is not configured (set RESEND_API_KEY or SMTP_HOST, plus MAIL_FROM).');
+  }
+  if (process.env.RESEND_API_KEY) {
+    await sendViaResendApi({ to, subject, text, html });
+    return;
   }
   await getTransporter().sendMail({ from: process.env.MAIL_FROM, to, subject, text, html });
 }
