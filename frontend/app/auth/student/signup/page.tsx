@@ -167,7 +167,7 @@ function StudentSignupForm() {
             onChange={(e) => update("academic_group", e.target.value)}
           />
           <SelectField
-            label="What are you preparing for?"
+            label="Your Future Goal"
             htmlFor="aspirant_type"
             required
             placeholder="Select your goal"
@@ -178,7 +178,7 @@ function StudentSignupForm() {
 
           <FormError message={error} />
           <p className="text-xs leading-relaxed text-text-faint">
-            By opening your dossier, you agree to Study Squad&apos;s{" "}
+            By opening your account, you agree to Study Squad&apos;s{" "}
             <Link href="/terms" className="text-cyan underline underline-offset-2">
               Terms &amp; Conditions
             </Link>{" "}
@@ -188,11 +188,11 @@ function StudentSignupForm() {
             </Link>
             .
           </p>
-          <SubmitButton loading={loading}>Open My Dossier</SubmitButton>
+          <SubmitButton loading={loading}>Open My Account</SubmitButton>
         </form>
 
         <p className="mt-6 text-center text-sm text-text-dim">
-          Already have a dossier?{" "}
+          Already have an account?{" "}
           <Link href="/auth/student/login" className="font-semibold text-cyan underline underline-offset-2">
             Sign in
           </Link>
