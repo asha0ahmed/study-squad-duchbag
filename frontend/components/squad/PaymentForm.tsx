@@ -32,6 +32,8 @@ const VALID_PROMO_CODES = [
   "PLACEHOLDER4",
   "PLACEHOLDER5",
 ];
+// Special code: makes every plan show as free (৳0).
+const FREE_PROMO_CODE = "durzoyvai";
 const PROMO_STORAGE_KEY = "study-squad-applied-promo-code";
 
 const METHODS: { value: PaymentMethod; label: string; number: string }[] = [
@@ -73,6 +75,8 @@ export function PaymentForm({
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
 
+  const isFree = appliedPromoCode?.toLowerCase() === FREE_PROMO_CODE;
+
   useEffect(() => {
     // Promo codes are no longer remembered: the student enters one fresh on
     // every visit to this form. Remove any code saved by the old behaviour.
@@ -81,7 +85,9 @@ export function PaymentForm({
 
   function handleApplyPromo() {
     const normalizedCode = promoCode.trim();
-    const validCode = VALID_PROMO_CODES.find((code) => code.toLowerCase() === normalizedCode.toLowerCase());
+    const validCode = [...VALID_PROMO_CODES, FREE_PROMO_CODE].find(
+      (code) => code.toLowerCase() === normalizedCode.toLowerCase(),
+    );
 
     if (!validCode) {
       setPromoError("Invalid promo code");
@@ -133,16 +139,20 @@ export function PaymentForm({
                 {EARLY_BIRD_ACTIVE || appliedPromoCode ? (
                   <>
                     <span className="mr-2 text-base line-through opacity-60">{p.price}</span>
-                    <span className="font-bold">{p.discountedPrice}</span>
+                    <span className="font-bold">{isFree ? "৳0" : p.discountedPrice}</span>
                   </>
                 ) : (
                   p.price
                 )}
               </span>
-              {EARLY_BIRD_ACTIVE && (
-                <span className="mt-1 block text-xs font-semibold opacity-90">
-                  {percentOff(p.price, p.discountedPrice)}% early bird discount
-                </span>
+              {isFree ? (
+                <span className="mt-1 block text-xs font-semibold opacity-90">100% discount applied</span>
+              ) : (
+                EARLY_BIRD_ACTIVE && (
+                  <span className="mt-1 block text-xs font-semibold opacity-90">
+                    {percentOff(p.price, p.discountedPrice)}% early bird discount
+                  </span>
+                )
               )}
             </button>
           ))}
